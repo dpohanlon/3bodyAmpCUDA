@@ -139,7 +139,7 @@ void legKern(const int n, KernelParams params)
     int stride = blockDim.x * gridDim.x;
 
     for (int i = index; i < n; i += stride){
-    	params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
     }
 
 }
@@ -159,7 +159,7 @@ void spinTermZemachKern(const int n, KernelParams params)
 
     for (int i = index; i < n; i += stride){
 
-    	params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
 
 		float pProd = params.p[i] * params.q[i];
 
@@ -183,7 +183,7 @@ void spinTermCovKern(const int n, KernelParams params)
 
     for (int i = index; i < n; i += stride){
 
-    	params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
 
 		float pProd = params.p[i] * params.q[i];
 
@@ -200,27 +200,27 @@ void calcLegendrePoly(SpinTermParams inParams)
 	KernelParams kParams;
 
 	cudaMallocManaged(&kParams.leg, n * sizeof(float));
-    cudaMallocManaged(&kParams.cosHel, n * sizeof(float));
+	cudaMallocManaged(&kParams.cosHel, n * sizeof(float));
 
 	kParams.cosHel = inParams.cosHel->data();
 
 	int device = -1;
 
-    cudaGetDevice(&device);
+	cudaGetDevice(&device);
 
 	cudaMemPrefetchAsync(kParams.leg, n * sizeof(float), device, NULL);
 	cudaMemPrefetchAsync(kParams.cosHel, n * sizeof(float), device, NULL);
 
 	int blockSize = 128;
-    int numBlocks = (n + blockSize - 1) / blockSize;
+	int numBlocks = (n + blockSize - 1) / blockSize;
 
-    legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
 
-    cudaError_t cudaStatus = cudaDeviceSynchronize();
+	cudaError_t cudaStatus = cudaDeviceSynchronize();
 
-    if (cudaStatus != cudaSuccess) {
-        std::cout << "sync failed" << std::endl;
-    }
+	if (cudaStatus != cudaSuccess) {
+	    std::cout << "sync failed" << std::endl;
+	}
 
 	inParams.leg->insert(inParams.leg->end(), &kParams.leg[0], &kParams.leg[n]);
 
@@ -235,9 +235,9 @@ void calcSpinTerm(SpinTermParams inParams)
 
 	KernelParams kParams;
 
-    cudaMallocManaged(&kParams.spinTerms, n * sizeof(float));
+	cudaMallocManaged(&kParams.spinTerms, n * sizeof(float));
 	cudaMallocManaged(&kParams.leg, n * sizeof(float));
-    cudaMallocManaged(&kParams.cosHel, n * sizeof(float));
+	cudaMallocManaged(&kParams.cosHel, n * sizeof(float));
 	cudaMallocManaged(&kParams.p, n * sizeof(float));
 	cudaMallocManaged(&kParams.q, n * sizeof(float));
 	if (covariant) cudaMallocManaged(&kParams.erm, n * sizeof(float));
@@ -251,19 +251,19 @@ void calcSpinTerm(SpinTermParams inParams)
 
 	int device = -1;
 
-    cudaGetDevice(&device);
+	cudaGetDevice(&device);
 
-    cudaMemPrefetchAsync(kParams.spinTerms, n * sizeof(float), device, NULL);
+	cudaMemPrefetchAsync(kParams.spinTerms, n * sizeof(float), device, NULL);
 	cudaMemPrefetchAsync(kParams.leg, n * sizeof(float), device, NULL);
 	cudaMemPrefetchAsync(kParams.cosHel, n * sizeof(float), device, NULL);
 	cudaMemPrefetchAsync(kParams.p, n * sizeof(float), device, NULL);
-    cudaMemPrefetchAsync(kParams.q, n * sizeof(float), device, NULL);
+	cudaMemPrefetchAsync(kParams.q, n * sizeof(float), device, NULL);
 	if (covariant) cudaMemPrefetchAsync(kParams.erm, n * sizeof(float), device, NULL);
 
 	int blockSize = 128;
-    int numBlocks = (n + blockSize - 1) / blockSize;
+	int numBlocks = (n + blockSize - 1) / blockSize;
 
-    // spinTermKern<Int2Type<SPIN1>, Int2Type<ZEMACH>><<<numBlocks, blockSize>>>(n, cosHel, p, q, out, leg);
+	// spinTermKern<Int2Type<SPIN1>, Int2Type<ZEMACH>><<<numBlocks, blockSize>>>(n, cosHel, p, q, out, leg);
 	// spinTermKern<Int2Type<spin>, Int2Type<spinType>><<<numBlocks, blockSize>>>(n, cosHel, p, q, out, leg);
 
 	if (!covariant) {
@@ -272,11 +272,11 @@ void calcSpinTerm(SpinTermParams inParams)
 		spinTermCovKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
 	}
 
-    cudaError_t cudaStatus = cudaDeviceSynchronize();
+	cudaError_t cudaStatus = cudaDeviceSynchronize();
 
-    if (cudaStatus != cudaSuccess) {
-        std::cout << "sync failed" << std::endl;
-    }
+	if (cudaStatus != cudaSuccess) {
+	    std::cout << "sync failed" << std::endl;
+	}
 
 	inParams.leg->insert(inParams.leg->end(), &kParams.leg[0], &kParams.leg[n]);
 	inParams.spinTerms->insert(inParams.spinTerms->end(), &kParams.spinTerms[0], &kParams.spinTerms[n]);
