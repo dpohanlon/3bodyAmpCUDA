@@ -20,7 +20,7 @@ struct SpinTermParams
 	std::vector<float> * spinTerms;
 
 	// Deal with these guys later...
-	static const int spin = 0;
+	static const int spin = 2;
 	static const int spinType = 0;
 };
 
@@ -32,6 +32,12 @@ struct KernelParams
 	float * cosHel;
 	float * leg;
 	float * spinTerms;
+};
+
+struct KernelParamsL
+{
+	float * cosHel;
+	float * leg;
 };
 
 // Spin functions
@@ -132,14 +138,14 @@ float covFactor<Int2Type<SPIN4>>(float erm)
 
 template<typename Spin>
 __global__
-void legKern(const int n, KernelParams params)
+void legKern(const int n, KernelParamsL params)
 {
 
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
     for (int i = index; i < n; i += stride){
-		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+        params.leg[i] = legFunc<Spin>(params.cosHel[i]);
     }
 
 }
@@ -159,11 +165,11 @@ void spinTermZemachKern(const int n, KernelParams params)
 
     for (int i = index; i < n; i += stride){
 
-		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+        params.leg[i] = legFunc<Spin>(params.cosHel[i]);
 
-		float pProd = params.p[i] * params.q[i];
+        float pProd = params.p[i] * params.q[i];
 
-		params.spinTerms[i] = params.leg[i] * pow(pProd, s.value);
+        params.spinTerms[i] = params.leg[i] * pow(pProd, s.value);
     }
 
 }
@@ -183,11 +189,11 @@ void spinTermCovKern(const int n, KernelParams params)
 
     for (int i = index; i < n; i += stride){
 
-		params.leg[i] = legFunc<Spin>(params.cosHel[i]);
+        params.leg[i] = legFunc<Spin>(params.cosHel[i]);
 
-		float pProd = params.p[i] * params.q[i];
+        float pProd = params.p[i] * params.q[i];
 
-		params.spinTerms[i] = params.leg[i] * pow(pProd, s.value) * covFactor<Spin>(params.erm[i]);
+        params.spinTerms[i] = params.leg[i] * pow(pProd, s.value) * covFactor<Spin>(params.erm[i]);
     }
 
 }
@@ -197,12 +203,21 @@ void calcLegendrePoly(SpinTermParams inParams)
 
 	int n = inParams.cosHel->size();
 
-	KernelParams kParams;
+	// KernelParams * kParams = new KernelParams();
+    KernelParamsL kParams;
 
-	cudaMallocManaged(&kParams.leg, n * sizeof(float));
-	cudaMallocManaged(&kParams.cosHel, n * sizeof(float));
+    cudaError_t mallocStatus;
 
-	kParams.cosHel = inParams.cosHel->data();
+	mallocStatus = cudaMallocManaged(&(kParams.leg), n * sizeof(float));
+    if (mallocStatus != cudaSuccess) std::cout << mallocStatus << std::endl;
+
+	mallocStatus = cudaMallocManaged(&(kParams.cosHel), n * sizeof(float));
+    if (mallocStatus != cudaSuccess) std::cout << mallocStatus << std::endl;
+
+    // Now points somewhere different!
+	// kParams.cosHel = inParams.cosHel->data();
+
+    *kParams.cosHel = *inParams.cosHel->data();
 
 	int device = -1;
 
@@ -216,6 +231,8 @@ void calcLegendrePoly(SpinTermParams inParams)
 
 	legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
 
+    exit(0);
+
 	cudaError_t cudaStatus = cudaDeviceSynchronize();
 
 	if (cudaStatus != cudaSuccess) {
@@ -223,6 +240,9 @@ void calcLegendrePoly(SpinTermParams inParams)
 	}
 
 	inParams.leg->insert(inParams.leg->end(), &kParams.leg[0], &kParams.leg[n]);
+
+    cudaFree(kParams.leg);
+    cudaFree(kParams.cosHel);
 
 }
 
@@ -232,6 +252,8 @@ void calcSpinTerm(SpinTermParams inParams)
 	int n = inParams.cosHel->size();
 
 	bool covariant = inParams.spinType == COVARIANT;
+
+    std::cout << n << " " << covariant << std::endl;
 
 	KernelParams kParams;
 
@@ -283,6 +305,27 @@ void calcSpinTerm(SpinTermParams inParams)
 }
 
 int main(int argc, char const *argv[]) {
+
+    std::vector<float> cosHel(10);
+
+    std::vector<float> q(10);
+    std::vector<float> p(10);
+
+    std::vector<float> erm(10);
+
+	std::fill(cosHel.begin(), cosHel.end(), 1.0);
+	std::fill(q.begin(), q.end(), 1.0);
+	std::fill(p.begin(), p.end(), 1.0);
+	std::fill(erm.begin(), erm.end(), 1.0);
+
+    SpinTermParams pars;
+
+    pars.q = &q;
+    pars.p = &p;
+    pars.cosHel = &cosHel;
+
+    // calcSpinTerm(pars);
+    calcLegendrePoly(pars);
 
 	return 0;
 }
