@@ -150,6 +150,15 @@ public:
 		return *this;
     }
 
+	void prefetch()
+	{
+		int device = -1;
+		cudaGetDevice(&device);
+
+		cudaMemPrefetchAsync(data, size * sizeof(float), device, NULL);
+		cudaMemPrefetchAsync(&size, sizeof(int), device, NULL);
+	}
+
 	__host__ __device__
     float& operator[](int pos) { return data[pos]; }
 
@@ -178,14 +187,8 @@ public:
 
 	void prefetch()
 	{
-		// Would prefer a loop over elements
-
-		int device = -1;
-		cudaGetDevice(&device);
-
-		cudaMemPrefetchAsync(&cosHel, cosHel.size * sizeof(float), device, NULL);
-		cudaMemPrefetchAsync(&leg, leg.size * sizeof(float), device, NULL);
-		cudaDeviceSynchronize();
+		cosHel.prefetch();
+		leg.prefetch();
 	}
 
 };
@@ -355,7 +358,7 @@ void calcLegendrePolyManaged(const SpinTermParams & inParams)
 
     KernelParamsL * kParams = new KernelParamsL(inParams.cosHel, inParams.leg);
 
-	// kParams->prefetch();
+	kParams->prefetch();
 
 	int blockSize = 128;
 	int numBlocks = (n + blockSize - 1) / blockSize;
@@ -479,7 +482,7 @@ void calcLegendrePolyManaged(const SpinTermParams & inParams)
 
 int main(int argc, char const *argv[]) {
 
-    SpinTermParams pars(int(1E4));
+    SpinTermParams pars(int(1E6));
 
 	std::fill(pars.cosHel->begin(), pars.cosHel->end(), 0.2);
 	std::fill(pars.q->begin(), pars.q->end(), 1.0);
