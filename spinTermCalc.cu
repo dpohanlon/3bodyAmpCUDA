@@ -75,6 +75,52 @@ public:
 
 };
 
+struct ResParams
+{
+public:
+
+    float resMass;
+    float resWidth;
+
+    std::vector<float> * mass;
+	std::vector<float> * qTerm;
+    std::vector<float> * ffRatioP;
+    std::vector<float> * ffRatioR;
+	std::vector<float> * spinTerms;
+
+    std::vector<float> * ampRe;
+    std::vector<float> * ampIm;
+
+	// Deal with these guys later...
+	static const int spin = 4;
+	static const int spinType = 1;
+
+	ResParams(int s)
+	{
+		mass = new std::vector<float>(s);
+		qTerm = new std::vector<float>(s);
+		ffRatioP = new std::vector<float>(s);
+		ffRatioR = new std::vector<float>(s);
+		spinTerms = new std::vector<float>(s);
+
+        ampRe = new std::vector<float>(s);
+        ampIm = new std::vector<float>(s);
+	}
+
+	~ResParams()
+	{
+        delete mass;
+		delete qTerm;
+		delete ffRatioP;
+		delete ffRatioR;
+		delete spinTerms;
+
+        delete ampRe;
+        delete ampIm;
+	}
+
+};
+
 class FloatArr : public Managed
 {
 
@@ -182,6 +228,37 @@ public:
 
 };
 
+class KernelResParams : public Managed
+{
+
+public:
+
+    // float resMass;
+    // float resWidth;
+
+    FloatArr mass;
+	FloatArr qTerm;
+    FloatArr ffRatioP;
+    FloatArr ffRatioR;
+	FloatArr spinTerms;
+    FloatArr ampRe;
+    FloatArr ampIm;
+
+	KernelResParams() {}
+
+	void prefetch()
+	{
+        mass.prefetch();
+    	qTerm.prefetch();
+        ffRatioP.prefetch();
+        ffRatioR.prefetch();
+    	spinTerms.prefetch();
+        ampRe.prefetch();
+        ampIm.prefetch();
+	}
+
+};
+
 // Spin functions
 
 template<typename Spin>
@@ -277,6 +354,30 @@ float covFactor<Int2Type<SPIN4>>(float erm)
     return (8.*erm*erm*erm*erm + 24.*erm*erm + 3.)/35.;
 }
 
+__global__
+void ampKern(const int n, const float resMass, const float resWidth, KernelResParams * params)
+{
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = index; i < n; i += stride){
+        float totWidth = resWidth * params->qTerm[i];
+        totWidth *= (resMass / params->mass[i]);
+        totWidth *= params->ffRatioP[i] * params->ffRatioR[i];
+
+        float m2 = params->mass[i] * params->mass[i];
+        float m2Term = resMass * resMass - m2;
+
+        float scale = params->spinTerms[i];
+        scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
+        scale *= params->ffRatioP[i] * params->ffRatioR[i]; // Optional -> template specialise?
+
+        params->ampRe[i] = m2Term * scale;
+        params->ampIm[i] = resMass * totWidth * scale;
+    }
+
+}
 
 template<typename Spin>
 __global__
@@ -320,7 +421,6 @@ template<typename Spin>
 __global__
 void spinTermCovKern(const int n, KernelParams * params)
 {
-
 	// Get an instance of our Int2Type type, so that
     // s.value is out integer spin (the enum value)
 
@@ -342,7 +442,6 @@ void spinTermCovKern(const int n, KernelParams * params)
 
 void calcLegendrePolyManaged(const SpinTermParams & inParams)
 {
-
 	int n = inParams.cosHel->size();
 
 	KernelParamsL * kParams = new KernelParamsL();
@@ -366,7 +465,6 @@ void calcLegendrePolyManaged(const SpinTermParams & inParams)
 
 void calcSpinTerm(const SpinTermParams & inParams)
 {
-
 	int n = inParams.cosHel->size();
 
 	bool covariant = inParams.spinType == COVARIANT;
@@ -401,6 +499,39 @@ void calcSpinTerm(const SpinTermParams & inParams)
 	delete kParams;
 }
 
+void calcAmp(const ResParams & inParams)
+{
+	int n = inParams.mass->size();
+
+	KernelResParams * kParams = new KernelResParams();
+
+	kParams->spinTerms = inParams.spinTerms;
+    kParams->mass = inParams.mass;
+	kParams->qTerm = inParams.qTerm;
+    kParams->ffRatioP = inParams.ffRatioP;
+    kParams->ffRatioR = inParams.ffRatioR;
+
+    kParams->ampRe = inParams.ampRe;
+    kParams->ampIm = inParams.ampIm;
+
+    // kParams->resMass = inParams.resMass;
+    // kParams->resWidth = inParams.resWidth;
+
+	kParams->prefetch();
+
+	int blockSize = 128;
+	int numBlocks = (n + blockSize - 1) / blockSize;
+
+	ampKern<<<numBlocks, blockSize>>>(n, inParams.resMass, inParams.resWidth, kParams);
+
+	kParams->sync();
+
+	inParams.ampRe->insert(inParams.ampRe->begin(), &kParams->ampRe[0], &kParams->ampRe[n]);
+    inParams.ampIm->insert(inParams.ampIm->begin(), &kParams->ampIm[0], &kParams->ampIm[n]);
+
+	delete kParams;
+}
+
 void calcSpinTermCPU(const SpinTermParams & inParams)
 {
 
@@ -419,18 +550,38 @@ int main(int argc, char const *argv[]) {
 	// floats -> keep an eye on the precision
 	// Might want to keep some things in GPU memory (e.g., spin terms) for further calculations
 
-	std::fill(pars.cosHel->begin(), pars.cosHel->end(), 0.2);
-	std::fill(pars.q->begin(), pars.q->end(), 0.05);
-	std::fill(pars.p->begin(), pars.p->end(), 0.003);
-	std::fill(pars.erm->begin(), pars.erm->end(), 3.3);
-	std::fill(pars.leg->begin(), pars.leg->end(), 1.0);
-	std::fill(pars.spinTerms->begin(), pars.spinTerms->end(), 1.0);
-
+	// std::fill(pars.cosHel->begin(), pars.cosHel->end(), 0.2);
+	// std::fill(pars.q->begin(), pars.q->end(), 0.05);
+	// std::fill(pars.p->begin(), pars.p->end(), 0.003);
+	// std::fill(pars.erm->begin(), pars.erm->end(), 3.3);
+	// std::fill(pars.leg->begin(), pars.leg->end(), 1.0);
+	// std::fill(pars.spinTerms->begin(), pars.spinTerms->end(), 1.0);
+    //
 	// calcSpinTerm(pars);
-	calcSpinTermCPU(pars);
+	// // calcSpinTermCPU(pars);
+    //
+	// std::cout << (pars.leg)->at(5) << std::endl;
+	// std::cout << (pars.spinTerms)->at(5) << std::endl;
 
-	std::cout << (pars.leg)->at(5) << std::endl;
-	std::cout << (pars.spinTerms)->at(5) << std::endl;
+    ResParams parsR(int(1E5));
+
+	std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
+	std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
+	std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
+	std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
+	std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
+
+	std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
+	std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
+
+    parsR.resMass = 1.0;
+    parsR.resWidth = 0.1;
+
+	calcAmp(parsR);
+	// calcSpinTermCPU(pa
+
+    std::cout << (parsR.ampRe)->at(5) << std::endl;
+	std::cout << (parsR.ampIm)->at(5) << std::endl;
 
 	return 0;
 }
