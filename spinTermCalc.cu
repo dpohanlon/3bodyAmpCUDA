@@ -357,6 +357,8 @@ float covFactor<Int2Type<SPIN4>>(float erm)
 __global__
 void ampKern(const int n, const float resMass, const float resWidth, KernelResParams * params)
 {
+	// All threads handle blockDim.x * gridDim.x
+	// consecutive elements (interleaved partitioning)
 
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
@@ -522,7 +524,9 @@ void calcAmp(const ResParams & inParams)
 	int blockSize = 128;
 	int numBlocks = (n + blockSize - 1) / blockSize;
 
-	ampKern<<<numBlocks, blockSize>>>(n, inParams.resMass, inParams.resWidth, kParams);
+    for (int i = 0; i < 100; i++){
+        ampKern<<<numBlocks, blockSize>>>(n, inParams.resMass, inParams.resWidth, kParams);
+    }
 
 	kParams->sync();
 
@@ -542,9 +546,31 @@ void calcSpinTermCPU(const SpinTermParams & inParams)
     }
 }
 
+void calcAmpCPU(const ResParams & inParams)
+{
+    float resMass = inParams.resMass;
+    float resWidth = inParams.resWidth;
+
+    for (int i = 0; i < inParams.mass->size(); i++) {
+        float totWidth = resWidth * inParams.qTerm->at(i);
+        totWidth *= (resMass / inParams.mass->at(i));
+        totWidth *= inParams.ffRatioP->at(i) * inParams.ffRatioR->at(i);
+
+        float m2 = inParams.mass->at(i) * inParams.mass->at(i);
+        float m2Term = resMass * resMass - m2;
+
+        float scale = inParams.spinTerms->at(i);
+        scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
+        scale *= inParams.ffRatioP->at(i) * inParams.ffRatioR->at(i); // Optional -> template specialise?
+
+        inParams.ampRe->at(i) = m2Term * scale;
+        inParams.ampIm->at(i) = resMass * totWidth * scale;
+    }
+}
+
 int main(int argc, char const *argv[]) {
 
-    SpinTermParams pars(int(1E8));
+    // SpinTermParams pars(int(1E8));
 
 	// Things to consider:
 	// floats -> keep an eye on the precision
@@ -563,7 +589,7 @@ int main(int argc, char const *argv[]) {
 	// std::cout << (pars.leg)->at(5) << std::endl;
 	// std::cout << (pars.spinTerms)->at(5) << std::endl;
 
-    ResParams parsR(int(1E5));
+    ResParams parsR(int(1E8));
 
 	std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
 	std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
@@ -578,7 +604,10 @@ int main(int argc, char const *argv[]) {
     parsR.resWidth = 0.1;
 
 	calcAmp(parsR);
-	// calcSpinTermCPU(pa
+
+    // for (int i = 0; i < 100; i++){
+    // 	calcAmpCPU(parsR);
+    // }
 
     std::cout << (parsR.ampRe)->at(5) << std::endl;
 	std::cout << (parsR.ampIm)->at(5) << std::endl;
