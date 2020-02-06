@@ -38,15 +38,15 @@ struct ResParams
 public:
 
     float mass;
-	float qTerm;
+    float qTerm;
     float ffRatioP;
     float ffRatioR;
-	float spinTerms;
+    float spinTerms;
 
     float ampRe;
     float ampIm;
 
-	ResParams()
+    ResParams()
     : mass(0),
       qTerm(0),
       ffRatioP(0),
@@ -65,41 +65,41 @@ public:
     float resWidth;
 
     std::vector<float> * mass;
-	std::vector<float> * qTerm;
+    std::vector<float> * qTerm;
     std::vector<float> * ffRatioP;
     std::vector<float> * ffRatioR;
-	std::vector<float> * spinTerms;
+    std::vector<float> * spinTerms;
 
     std::vector<float> * ampRe;
     std::vector<float> * ampIm;
 
-	// Deal with these guys later...
-	static const int spin = 4;
-	static const int spinType = 1;
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
 
-	ResParamsSoA(int s)
-	{
-		mass = new std::vector<float>(s);
-		qTerm = new std::vector<float>(s);
-		ffRatioP = new std::vector<float>(s);
-		ffRatioR = new std::vector<float>(s);
-		spinTerms = new std::vector<float>(s);
+    ResParamsSoA(int s)
+    {
+        mass = new std::vector<float>(s);
+        qTerm = new std::vector<float>(s);
+        ffRatioP = new std::vector<float>(s);
+        ffRatioR = new std::vector<float>(s);
+        spinTerms = new std::vector<float>(s);
 
         ampRe = new std::vector<float>(s);
         ampIm = new std::vector<float>(s);
-	}
+    }
 
-	~ResParamsSoA()
-	{
+    ~ResParamsSoA()
+    {
         delete mass;
-		delete qTerm;
-		delete ffRatioP;
-		delete ffRatioR;
-		delete spinTerms;
+        delete qTerm;
+        delete ffRatioP;
+        delete ffRatioR;
+        delete spinTerms;
 
         delete ampRe;
         delete ampIm;
-	}
+    }
 
 };
 
@@ -111,31 +111,31 @@ public:
     float resWidth;
 
     std::vector<float> mass;
-	std::vector<float> qTerm;
+    std::vector<float> qTerm;
     std::vector<float> ffRatioP;
     std::vector<float> ffRatioR;
-	std::vector<float> spinTerms;
+    std::vector<float> spinTerms;
 
     std::vector<float> ampRe;
     std::vector<float> ampIm;
 
-	// Deal with these guys later...
-	static const int spin = 4;
-	static const int spinType = 1;
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
 
-	ResParamsSoAStack(int n) {
+    ResParamsSoAStack(int n) {
 
-		mass.resize(n);
-		qTerm.resize(n);
-		ffRatioP.resize(n);
-		ffRatioR.resize(n);
-		spinTerms.resize(n);
+        mass.resize(n);
+        qTerm.resize(n);
+        ffRatioP.resize(n);
+        ffRatioR.resize(n);
+        spinTerms.resize(n);
 
         ampRe.resize(n);
         ampIm.resize(n);
-	}
+    }
 
-	~ResParamsSoAStack() { }
+    ~ResParamsSoAStack() { }
 
 };
 
@@ -147,50 +147,50 @@ public:
     float resWidth;
 
     // Too large to allocate on stack (?)
-	// Possible to do more with static allocation?
+    // Possible to do more with static allocation?
 
     // static const int n = 1E8;
 
     Eigen::Array<float,Eigen::Dynamic,1> * mass;
-	Eigen::Array<float,Eigen::Dynamic,1> * qTerm;
+    Eigen::Array<float,Eigen::Dynamic,1> * qTerm;
     Eigen::Array<float,Eigen::Dynamic,1> * ffRatioP;
     Eigen::Array<float,Eigen::Dynamic,1> * ffRatioR;
-	Eigen::Array<float,Eigen::Dynamic,1> * spinTerms;
+    Eigen::Array<float,Eigen::Dynamic,1> * spinTerms;
 
     Eigen::Array<float,Eigen::Dynamic,1> * ampRe;
     Eigen::Array<float,Eigen::Dynamic,1> * ampIm;
 
-	// Deal with these guys later...
-	static const int spin = 4;
-	static const int spinType = 1;
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
 
-	ResParamsEigen(int n)
-	{
+    ResParamsEigen(int n)
+    {
 
-		resMass = 0;
-	    resWidth = 0;
+        resMass = 0;
+        resWidth = 0;
 
-		mass = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-		qTerm = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-		ffRatioP = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-		ffRatioR = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-		spinTerms = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        mass = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        qTerm = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ffRatioP = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ffRatioR = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        spinTerms = new Eigen::Array<float,Eigen::Dynamic,1>(n);
 
         ampRe = new Eigen::Array<float,Eigen::Dynamic,1>(n);
         ampIm = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-	}
+    }
 
-	~ResParamsEigen()
-	{
+    ~ResParamsEigen()
+    {
         delete mass;
-		delete qTerm;
-		delete ffRatioP;
-		delete ffRatioR;
-		delete spinTerms;
+        delete qTerm;
+        delete ffRatioP;
+        delete ffRatioR;
+        delete spinTerms;
 
         delete ampRe;
         delete ampIm;
-	}
+    }
 
 };
 
@@ -312,13 +312,13 @@ void benchAoS()
         p = std::make_unique<ResParams>();
 
         p->qTerm = 0.05;
-    	p->mass = 0.3;
-    	p->ffRatioP = 3.3;
-    	p->ffRatioR = 1.0;
-    	p->spinTerms = 1.0;
+        p->mass = 0.3;
+        p->ffRatioP = 3.3;
+        p->ffRatioR = 1.0;
+        p->spinTerms = 1.0;
 
-    	p->ampRe = 1.0;
-    	p->ampIm = 1.0;
+        p->ampRe = 1.0;
+        p->ampIm = 1.0;
     }
 
     float resMass = 1.0;
@@ -344,13 +344,13 @@ void benchAoSStack()
         ResParams params;
 
         params.qTerm = 0.05;
-    	params.mass = 0.3;
-    	params.ffRatioP = 3.3;
-    	params.ffRatioR = 1.0;
-    	params.spinTerms = 1.0;
+        params.mass = 0.3;
+        params.ffRatioP = 3.3;
+        params.ffRatioR = 1.0;
+        params.spinTerms = 1.0;
 
-    	params.ampRe = 1.0;
-    	params.ampIm = 1.0;
+        params.ampRe = 1.0;
+        params.ampIm = 1.0;
 
         resParamsAoSStack.push_back(params);
 
@@ -362,7 +362,7 @@ void benchAoSStack()
     calcAmpAoSStack(resParamsAoSStack, resMass, resWidth);
 
     // std::cout << resParamsAoSStack.at(5).ampRe << std::endl;
-	// std::cout << resParamsAoSStack.at(5).ampIm << std::endl;
+    // std::cout << resParamsAoSStack.at(5).ampIm << std::endl;
 }
 
 void benchSoA()
@@ -371,14 +371,14 @@ void benchSoA()
 
     ResParamsSoA parsR(int(1E8));
 
-	std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
-	std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
-	std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
-	std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
-	std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
+    std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
+    std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
+    std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
+    std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
+    std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
 
-	std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
-	std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
+    std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
+    std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
 
     parsR.resMass = 1.0;
     parsR.resWidth = 0.1;
@@ -386,7 +386,7 @@ void benchSoA()
     calcAmpSoA(parsR);
 
     // std::cout << (parsR.ampRe)->at(5) << std::endl;
-	// std::cout << (parsR.ampIm)->at(5) << std::endl;
+    // std::cout << (parsR.ampIm)->at(5) << std::endl;
 }
 
 void benchSoAStack()
@@ -395,14 +395,14 @@ void benchSoAStack()
 
     ResParamsSoAStack parsR(int(1E8));
 
-	std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), 0.05);
-	std::fill(parsR.mass.begin(), parsR.mass.end(), 0.3);
-	std::fill(parsR.ffRatioP.begin(), parsR.ffRatioP.end(), 3.3);
-	std::fill(parsR.ffRatioR.begin(), parsR.ffRatioR.end(), 1.0);
-	std::fill(parsR.spinTerms.begin(), parsR.spinTerms.end(), 1.0);
+    std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), 0.05);
+    std::fill(parsR.mass.begin(), parsR.mass.end(), 0.3);
+    std::fill(parsR.ffRatioP.begin(), parsR.ffRatioP.end(), 3.3);
+    std::fill(parsR.ffRatioR.begin(), parsR.ffRatioR.end(), 1.0);
+    std::fill(parsR.spinTerms.begin(), parsR.spinTerms.end(), 1.0);
 
-	std::fill(parsR.ampRe.begin(), parsR.ampRe.end(), 1.0);
-	std::fill(parsR.ampIm.begin(), parsR.ampIm.end(), 1.0);
+    std::fill(parsR.ampRe.begin(), parsR.ampRe.end(), 1.0);
+    std::fill(parsR.ampIm.begin(), parsR.ampIm.end(), 1.0);
 
     parsR.resMass = 1.0;
     parsR.resWidth = 0.1;
@@ -410,7 +410,7 @@ void benchSoAStack()
     calcAmpSoAStack(parsR);
 
     // std::cout << parsR.ampRe.at(5) << std::endl;
-	// std::cout << parsR.ampIm.at(5) << std::endl;
+    // std::cout << parsR.ampIm.at(5) << std::endl;
 }
 
 void benchEigen()
@@ -420,14 +420,14 @@ void benchEigen()
     int n = int(1E8);
     ResParamsEigen parsR(n);
 
-	*parsR.qTerm = Eigen::ArrayXf::Ones(n, 1);
-	*parsR.mass = Eigen::ArrayXf::Ones(n, 1);
-	*parsR.ffRatioP = Eigen::ArrayXf::Ones(n, 1);
-	*parsR.ffRatioR = Eigen::ArrayXf::Ones(n, 1);
-	*parsR.spinTerms = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.qTerm = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.mass = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.ffRatioP = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.ffRatioR = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.spinTerms = Eigen::ArrayXf::Ones(n, 1);
 
-	*parsR.ampRe = Eigen::ArrayXf::Ones(n, 1);
-	*parsR.ampIm = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.ampRe = Eigen::ArrayXf::Ones(n, 1);
+    *parsR.ampIm = Eigen::ArrayXf::Ones(n, 1);
 
     parsR.resMass = 1.0;
     parsR.resWidth = 0.1;
@@ -435,7 +435,7 @@ void benchEigen()
     calcAmpEigen(parsR);
 
     // std::cout << (*parsR.ampRe)[5] << std::endl;
-	// std::cout << (*parsR.ampIm)[5] << std::endl;
+    // std::cout << (*parsR.ampIm)[5] << std::endl;
 }
 
 int main(int argc, char const *argv[]) {
@@ -443,25 +443,25 @@ int main(int argc, char const *argv[]) {
 
     for (int i = 0; i < 10; i++) { benchSoA(); }
 
-	std::cout << std::endl;
+    std::cout << std::endl;
     std::cout<< "SoA (stack):" << std::endl;
 
-	for (int i = 0; i < 10; i++) { benchSoAStack(); }
+    for (int i = 0; i < 10; i++) { benchSoAStack(); }
 
     std::cout << std::endl;
     std::cout<< "AoS:" << std::endl;
 
     for (int i = 0; i < 10; i++) { benchAoS(); }
 
-	std::cout << std::endl;
+    std::cout << std::endl;
     std::cout<< "AoS (stack):" << std::endl;
 
-	for (int i = 0; i < 10; i++) { benchAoSStack(); }
+    for (int i = 0; i < 10; i++) { benchAoSStack(); }
 
     std::cout << std::endl;
     std::cout<< "Eigen:" << std::endl;
 
     for (int i = 0; i < 10; i++) { benchEigen(); }
 
-	return 0;
+    return 0;
 }
