@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 
+// From http://www.drdobbs.com/genericprogramming-mappings-between-type/184403750
 template <int I>
 struct Int2Type
 {
@@ -237,10 +238,10 @@ public:
     // float resWidth;
 
     FloatArr mass;
-	FloatArr qTerm;
+    FloatArr qTerm;
     FloatArr ffRatioP;
     FloatArr ffRatioR;
-	FloatArr spinTerms;
+    FloatArr spinTerms;
     FloatArr ampRe;
     FloatArr ampIm;
 
