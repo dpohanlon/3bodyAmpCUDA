@@ -26,6 +26,16 @@
 
 #include <boost/timer/timer.hpp>
 
+// #include <blaze/math/StaticVector.h>
+// #include <blaze/math/DynamicVector.h>
+
+#include <blaze/Math.h>
+
+using blaze::StaticVector;
+using blaze::DynamicVector;
+
+static const int n_global = 1E5;
+
 // Spin 5 - no need for template here
 float legFunc(float cosHel)
 {
@@ -149,16 +159,14 @@ public:
     // Too large to allocate on stack (?)
     // Possible to do more with static allocation?
 
-    // static const int n = 1E8;
+    Eigen::Array<float,Eigen::Dynamic,1> mass;
+    Eigen::Array<float,Eigen::Dynamic,1> qTerm;
+    Eigen::Array<float,Eigen::Dynamic,1> ffRatioP;
+    Eigen::Array<float,Eigen::Dynamic,1> ffRatioR;
+    Eigen::Array<float,Eigen::Dynamic,1> spinTerms;
 
-    Eigen::Array<float,Eigen::Dynamic,1> * mass;
-    Eigen::Array<float,Eigen::Dynamic,1> * qTerm;
-    Eigen::Array<float,Eigen::Dynamic,1> * ffRatioP;
-    Eigen::Array<float,Eigen::Dynamic,1> * ffRatioR;
-    Eigen::Array<float,Eigen::Dynamic,1> * spinTerms;
-
-    Eigen::Array<float,Eigen::Dynamic,1> * ampRe;
-    Eigen::Array<float,Eigen::Dynamic,1> * ampIm;
+    Eigen::Array<float,Eigen::Dynamic,1> ampRe;
+    Eigen::Array<float,Eigen::Dynamic,1> ampIm;
 
     // Deal with these guys later...
     static const int spin = 4;
@@ -170,26 +178,74 @@ public:
         resMass = 0;
         resWidth = 0;
 
-        mass = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-        qTerm = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-        ffRatioP = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-        ffRatioR = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-        spinTerms = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        mass = Eigen::Array<float,Eigen::Dynamic,1>(n);
+        qTerm = Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ffRatioP = Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ffRatioR = Eigen::Array<float,Eigen::Dynamic,1>(n);
+        spinTerms = Eigen::Array<float,Eigen::Dynamic,1>(n);
 
-        ampRe = new Eigen::Array<float,Eigen::Dynamic,1>(n);
-        ampIm = new Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ampRe = Eigen::Array<float,Eigen::Dynamic,1>(n);
+        ampIm = Eigen::Array<float,Eigen::Dynamic,1>(n);
     }
 
     ~ResParamsEigen()
     {
-        delete mass;
-        delete qTerm;
-        delete ffRatioP;
-        delete ffRatioR;
-        delete spinTerms;
 
-        delete ampRe;
-        delete ampIm;
+    }
+
+};
+
+struct ResParamsBlaze
+{
+public:
+
+    float resMass;
+    float resWidth;
+
+    static const int n = n_global;
+
+    // DynamicVector<float> mass;
+    // DynamicVector<float> qTerm;
+    // DynamicVector<float> ffRatioP;
+    // DynamicVector<float> ffRatioR;
+    // DynamicVector<float> spinTerms;
+    //
+    // DynamicVector<float> ampRe;
+    // DynamicVector<float> ampIm;
+
+    StaticVector<float, n> mass;
+    StaticVector<float, n> qTerm;
+    StaticVector<float, n> ffRatioP;
+    StaticVector<float, n> ffRatioR;
+    StaticVector<float, n> spinTerms;
+
+    StaticVector<float, n> ampRe;
+    StaticVector<float, n> ampIm;
+
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
+
+    ResParamsBlaze()
+    {
+
+        resMass = 0;
+        resWidth = 0;
+
+        // mass = DynamicVector<float>(this->n);
+        // qTerm = DynamicVector<float>(this->n);
+        // ffRatioP = DynamicVector<float>(this->n);
+        // ffRatioR = DynamicVector<float>(this->n);
+        // spinTerms = DynamicVector<float>(this->n);
+        //
+        // ampRe = DynamicVector<float>(this->n);
+        // ampIm = DynamicVector<float>(this->n);
+
+    }
+
+    ~ResParamsBlaze()
+    {
+
     }
 
 };
@@ -278,31 +334,49 @@ void calcAmpAoSStack(std::vector<ResParams> & inParams, float resMass, float res
     }
 }
 
-void calcAmpEigen(const ResParamsEigen & inParams)
+void calcAmpEigen(ResParamsEigen & inParams)
 {
     float resMass = inParams.resMass;
     float resWidth = inParams.resWidth;
 
-    Eigen::Array<float,Eigen::Dynamic,1> totWidth = resWidth * (*inParams.qTerm);
-    totWidth *= (resMass / (*inParams.mass));
-    totWidth *= totWidth * (*inParams.ffRatioP) * (*inParams.ffRatioR);
+    Eigen::Array<float,Eigen::Dynamic,1> totWidth = resWidth * (inParams.qTerm);
+    totWidth *= (resMass / (inParams.mass));
+    totWidth *= totWidth * (inParams.ffRatioP) * (inParams.ffRatioR);
 
-    Eigen::Array<float,Eigen::Dynamic,1> m2 = (*inParams.mass) * (*inParams.mass);
+    Eigen::Array<float,Eigen::Dynamic,1> m2 = (inParams.mass) * (inParams.mass);
     Eigen::Array<float,Eigen::Dynamic,1> m2Term = resMass * resMass - m2;
 
-    Eigen::Array<float,Eigen::Dynamic,1> scale = (*inParams.spinTerms);
+    Eigen::Array<float,Eigen::Dynamic,1> scale = (inParams.spinTerms);
     scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
-    scale *= (*inParams.ffRatioP) * (*inParams.ffRatioR);
+    scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
 
-    (*inParams.ampRe) = m2Term * scale;
-    (*inParams.ampIm) = resMass * totWidth * scale;
+    (inParams.ampRe) = m2Term * scale;
+    (inParams.ampIm) = resMass * totWidth * scale;
+}
+
+void calcAmpBlaze(ResParamsBlaze & inParams)
+{
+    float resMass = inParams.resMass;
+    float resWidth = inParams.resWidth;
+
+    DynamicVector<float> totWidth = resWidth * (inParams.qTerm);
+    totWidth *= (resMass / (inParams.mass));
+    totWidth *= totWidth * (inParams.ffRatioP) * (inParams.ffRatioR);
+
+    DynamicVector<float> m2 = (inParams.mass) * (inParams.mass);
+    DynamicVector<float> m2Term = resMass * resMass - m2;
+
+    DynamicVector<float> scale = (inParams.spinTerms);
+    scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
+    scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
+
+    (inParams.ampRe) = m2Term * scale;
+    (inParams.ampIm) = resMass * totWidth * scale;
 }
 
 void benchAoS()
 {
-    boost::timer::auto_cpu_timer t;
-
-    static const int n = int(1E8);
+    static const int n = n_global;
 
     std::vector<std::unique_ptr<ResParams>> resParamsAoS;
     resParamsAoS.resize(n);
@@ -332,9 +406,7 @@ void benchAoS()
 
 void benchAoSStack()
 {
-    boost::timer::auto_cpu_timer t;
-
-    int n = int(1E8);
+    int n = n_global;
 
     std::vector<ResParams> resParamsAoSStack;
     resParamsAoSStack.reserve(n);
@@ -367,9 +439,7 @@ void benchAoSStack()
 
 void benchSoA()
 {
-    boost::timer::auto_cpu_timer t;
-
-    ResParamsSoA parsR(int(1E8));
+    ResParamsSoA parsR(n_global);
 
     std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
     std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
@@ -391,9 +461,7 @@ void benchSoA()
 
 void benchSoAStack()
 {
-    boost::timer::auto_cpu_timer t;
-
-    ResParamsSoAStack parsR(int(1E8));
+    ResParamsSoAStack parsR(n_global);
 
     std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), 0.05);
     std::fill(parsR.mass.begin(), parsR.mass.end(), 0.3);
@@ -415,19 +483,17 @@ void benchSoAStack()
 
 void benchEigen()
 {
-    boost::timer::auto_cpu_timer t;
-
-    int n = int(1E8);
+    int n = n_global;
     ResParamsEigen parsR(n);
 
-    *parsR.qTerm = Eigen::ArrayXf::Ones(n, 1);
-    *parsR.mass = Eigen::ArrayXf::Ones(n, 1);
-    *parsR.ffRatioP = Eigen::ArrayXf::Ones(n, 1);
-    *parsR.ffRatioR = Eigen::ArrayXf::Ones(n, 1);
-    *parsR.spinTerms = Eigen::ArrayXf::Ones(n, 1);
+    parsR.qTerm = Eigen::ArrayXf::Ones(n, 1);
+    parsR.mass = Eigen::ArrayXf::Ones(n, 1);
+    parsR.ffRatioP = Eigen::ArrayXf::Ones(n, 1);
+    parsR.ffRatioR = Eigen::ArrayXf::Ones(n, 1);
+    parsR.spinTerms = Eigen::ArrayXf::Ones(n, 1);
 
-    *parsR.ampRe = Eigen::ArrayXf::Ones(n, 1);
-    *parsR.ampIm = Eigen::ArrayXf::Ones(n, 1);
+    parsR.ampRe = Eigen::ArrayXf::Ones(n, 1);
+    parsR.ampIm = Eigen::ArrayXf::Ones(n, 1);
 
     parsR.resMass = 1.0;
     parsR.resWidth = 0.1;
@@ -438,30 +504,79 @@ void benchEigen()
     // std::cout << (*parsR.ampIm)[5] << std::endl;
 }
 
+void benchBlaze()
+{
+    ResParamsBlaze parsR;
+
+    // parsR.qTerm = 1.3;
+    // parsR.mass = 1.0;
+    // parsR.ffRatioP = 1.3;
+    // parsR.ffRatioR = 1.2;
+    // parsR.spinTerms = 1.8;
+    //
+    // parsR.ampRe = 1.1;
+    // parsR.ampIm = 1.2;
+    //
+    // parsR.resMass = 1.2;
+    // parsR.resWidth = 0.3;
+
+    // std::cout << parsR.qTerm << std::endl;
+
+    calcAmpBlaze(parsR);
+
+    // std::cout << (*parsR.ampRe)[5] << std::endl;
+    // std::cout << (*parsR.ampIm)[5] << std::endl;
+}
+
 int main(int argc, char const *argv[]) {
+
+    int n_itr = 100;
+
     std::cout<< "SoA:" << std::endl;
-
-    for (int i = 0; i < 10; i++) { benchSoA(); }
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchSoA(); }
+    }
 
     std::cout << std::endl;
+
     std::cout<< "SoA (stack):" << std::endl;
-
-    for (int i = 0; i < 10; i++) { benchSoAStack(); }
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchSoAStack(); }
+    }
 
     std::cout << std::endl;
+
     std::cout<< "AoS:" << std::endl;
-
-    for (int i = 0; i < 10; i++) { benchAoS(); }
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchAoS(); }
+    }
 
     std::cout << std::endl;
+
     std::cout<< "AoS (stack):" << std::endl;
-
-    for (int i = 0; i < 10; i++) { benchAoSStack(); }
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchAoSStack(); }
+    }
 
     std::cout << std::endl;
-    std::cout<< "Eigen:" << std::endl;
 
-    for (int i = 0; i < 10; i++) { benchEigen(); }
+    std::cout<< "Eigen:" << std::endl;
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchEigen(); }
+    }
+
+    std::cout << std::endl;
+
+    std::cout<< "Blaze:" << std::endl;
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchBlaze(); }
+    }
 
     return 0;
 }
