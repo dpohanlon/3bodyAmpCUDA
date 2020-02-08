@@ -77,7 +77,7 @@ public:
     }
 
     __host__ __device__
-    float& operator[](int pos) { return data[pos]; }
+    float& operator[](int pos) const { return data[pos]; }
 
 private:
 
@@ -99,22 +99,22 @@ public:
     FloatArr knotsY;
     FloatArr dydxs;
 
-    KernelParamsL() {}
+    SplineParams() {}
 
-    KernelParamsL(FloatArr knotsX_, FloatArr knotsY_, FloatArr dydxs_)
-                  : knotsX(knotsX_), knotsY(knotsY_), dydxs(dydxs_) {}
+    SplineParams(FloatArr knotsX_, FloatArr knotsY_, FloatArr dydxs_)
+                 : knotsX(knotsX_), knotsY(knotsY_), dydxs(dydxs_) {}
 
     void prefetch()
     {
         knotsX.prefetch();
         knotsY.prefetch();
-        dydxs_.prefetch();
+        dydxs.prefetch();
     }
 
 };
 
 __global__
-void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * params, FloatArr * splineVals)
+void evalSplineKern(const int n, const FloatArr & xs, const SplineParams & params, FloatArr & splineVals)
 {
     // All threads handle blockDim.x * gridDim.x
     // consecutive elements (interleaved partitioning)
@@ -126,20 +126,23 @@ void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * param
 
         int cell(0);
 
-        while( xs->at(i) > params->knotsX->at(cell+1) ) {
+        // Try and avoid this on GPU if possible -> precompute and save?
+        while( xs[i] > params.knotsX[cell+1] ) {
             ++cell;
         }
 
-        float xLow  = params->knotsX->at(cell);
-        float xHigh = params->knotsX->at(cell+1);
-        float yLow  = params->knotsY->at(cell);
-        float yHigh = params->knotsY->at(cell+1);
+        // Might be a slow memory access....
 
-        float t = (xs->at(i) - xLow) / (xHigh - xLow);
-        float a = params->dydxs->at(cell) * (xHigh - xLow) - (yHigh - yLow);
-        float b = -1. * params->dydxs->at(cell+1) * (xHigh - xLow) + (yHigh - yLow);
+        float xLow  = params.knotsX[cell];
+        float xHigh = params.knotsX[cell+1];
+        float yLow  = params.knotsY[cell];
+        float yHigh = params.knotsY[cell+1];
 
-        splineVals->at(i) = (1 - t) * yLow + t * yHigh + t * (1 - t) * ( a * (1 - t) + b * t );
+        float t = (xs[i] - xLow) / (xHigh - xLow);
+        float a = params.dydxs[cell] * (xHigh - xLow) - (yHigh - yLow);
+        float b = -1. * params.dydxs[cell+1] * (xHigh - xLow) + (yHigh - yLow);
+
+        splineVals[i] = (1 - t) * yLow + t * yHigh + t * (1 - t) * ( a * (1 - t) + b * t );
 
     }
 
@@ -155,16 +158,16 @@ void calcSplineGPU(std::vector<float> & knotsX,
 
     SplineParams * splineParams = new SplineParams();
 
-    splineParams->knotsX = knotsX;
-    splineParams->knotsY = knotsY;
-    splineParams->dydxs = dydxs;
+    splineParams->knotsX = &knotsX;
+    splineParams->knotsY = &knotsY;
+    splineParams->dydxs = &dydxs;
 
-    FloatArr xs = masses;
+    FloatArr xs = &masses;
 
     std::vector<float> splineValsV;
     std::fill(splineValsV.begin(), splineValsV.end(), 0.0);
 
-    FloatArr splineVals = splineValsV;
+    FloatArr splineVals = &splineValsV;
 
     splineParams->prefetch();
     xs.prefetch();
@@ -174,7 +177,7 @@ void calcSplineGPU(std::vector<float> & knotsX,
     int numBlocks = (n + blockSize - 1) / blockSize;
 
     for (int i = 0; i < 100; i++){
-        evalSplineKern<<<numBlocks, blockSize>>>(n, &xs, splineParams, &splineVals);
+        evalSplineKern<<<numBlocks, blockSize>>>(n, xs, *splineParams, splineVals);
     }
 
     splineParams->sync();
