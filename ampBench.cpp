@@ -359,14 +359,14 @@ void calcAmpBlaze(ResParamsBlaze & inParams)
     float resMass = inParams.resMass;
     float resWidth = inParams.resWidth;
 
-    DynamicVector<float> totWidth = resWidth * (inParams.qTerm);
+    StaticVector<float, n_global> totWidth = resWidth * (inParams.qTerm);
     totWidth *= (resMass / (inParams.mass));
     totWidth *= totWidth * (inParams.ffRatioP) * (inParams.ffRatioR);
 
-    DynamicVector<float> m2 = (inParams.mass) * (inParams.mass);
-    DynamicVector<float> m2Term = resMass * resMass - m2;
+    StaticVector<float, n_global> m2 = (inParams.mass) * (inParams.mass);
+    StaticVector<float, n_global> m2Term = resMass * resMass - m2;
 
-    DynamicVector<float> scale = (inParams.spinTerms);
+    StaticVector<float, n_global> scale = (inParams.spinTerms);
     scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
     scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
 
@@ -508,24 +508,24 @@ void benchBlaze()
 {
     ResParamsBlaze parsR;
 
-    // parsR.qTerm = 1.3;
-    // parsR.mass = 1.0;
-    // parsR.ffRatioP = 1.3;
-    // parsR.ffRatioR = 1.2;
-    // parsR.spinTerms = 1.8;
-    //
-    // parsR.ampRe = 1.1;
-    // parsR.ampIm = 1.2;
-    //
-    // parsR.resMass = 1.2;
-    // parsR.resWidth = 0.3;
+    parsR.qTerm = 1.3;
+    parsR.mass = 1.0;
+    parsR.ffRatioP = 1.3;
+    parsR.ffRatioR = 1.2;
+    parsR.spinTerms = 1.8;
+
+    parsR.ampRe = 1.1;
+    parsR.ampIm = 1.2;
+
+    parsR.resMass = 1.2;
+    parsR.resWidth = 0.3;
 
     // std::cout << parsR.qTerm << std::endl;
 
     calcAmpBlaze(parsR);
 
-    // std::cout << (*parsR.ampRe)[5] << std::endl;
-    // std::cout << (*parsR.ampIm)[5] << std::endl;
+    // std::cout << parsR.ampRe[5] << std::endl;
+    // std::cout << parsR.ampIm[5] << std::endl;
 }
 
 int main(int argc, char const *argv[]) {
