@@ -31,10 +31,15 @@
 
 #include <blaze/Math.h>
 
+#include "xtensor/xtensor.hpp"
+#include "xtensor/xfixed.hpp"
+#include "xtensor/xarray.hpp"
+#include "xtensor/xio.hpp"
+
 using blaze::StaticVector;
 using blaze::DynamicVector;
 
-static const int n_global = 1E5;
+static const int n_global = 1E3;
 
 // Spin 5 - no need for template here
 float legFunc(float cosHel)
@@ -250,6 +255,61 @@ public:
 
 };
 
+struct ResParamsXTensor
+{
+public:
+
+    float resMass;
+    float resWidth;
+
+    static const int n = n_global;
+
+    // DynamicVector<float> mass;
+    // DynamicVector<float> qTerm;
+    // DynamicVector<float> ffRatioP;
+    // DynamicVector<float> ffRatioR;
+    // DynamicVector<float> spinTerms;
+    //
+    // DynamicVector<float> ampRe;
+    // DynamicVector<float> ampIm;
+
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> mass;
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> qTerm;
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> ffRatioP;
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> ffRatioR;
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> spinTerms;
+
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> ampRe;
+    xt::xtensor_fixed<double, xt::xshape<n, 1>> ampIm;
+
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
+
+    ResParamsXTensor()
+    {
+
+        resMass = 0;
+        resWidth = 0;
+
+        // mass = DynamicVector<float>(this->n);
+        // qTerm = DynamicVector<float>(this->n);
+        // ffRatioP = DynamicVector<float>(this->n);
+        // ffRatioR = DynamicVector<float>(this->n);
+        // spinTerms = DynamicVector<float>(this->n);
+        //
+        // ampRe = DynamicVector<float>(this->n);
+        // ampIm = DynamicVector<float>(this->n);
+
+    }
+
+    ~ResParamsXTensor()
+    {
+
+    }
+
+};
+
 void calcAmpSoA(const ResParamsSoA & inParams)
 {
     float resMass = inParams.resMass;
@@ -350,8 +410,8 @@ void calcAmpEigen(ResParamsEigen & inParams)
     scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
     scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
 
-    (inParams.ampRe) = m2Term * scale;
-    (inParams.ampIm) = resMass * totWidth * scale;
+    inParams.ampRe = m2Term * scale;
+    inParams.ampIm = resMass * totWidth * scale;
 }
 
 void calcAmpBlaze(ResParamsBlaze & inParams)
@@ -370,8 +430,28 @@ void calcAmpBlaze(ResParamsBlaze & inParams)
     scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
     scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
 
-    (inParams.ampRe) = m2Term * scale;
-    (inParams.ampIm) = resMass * totWidth * scale;
+    inParams.ampRe = m2Term * scale;
+    inParams.ampIm = resMass * totWidth * scale;
+}
+
+void calcAmpXTensor(ResParamsXTensor & inParams)
+{
+    float resMass = inParams.resMass;
+    float resWidth = inParams.resWidth;
+
+    xt::xtensor_fixed<double, xt::xshape<n_global, 1>> totWidth = resWidth * (inParams.qTerm);
+    totWidth *= (resMass / (inParams.mass));
+    totWidth *= totWidth * (inParams.ffRatioP) * (inParams.ffRatioR);
+
+    xt::xtensor_fixed<double, xt::xshape<n_global, 1>> m2 = (inParams.mass) * (inParams.mass);
+    xt::xtensor_fixed<double, xt::xshape<n_global, 1>> m2Term = resMass * resMass - m2;
+
+    xt::xtensor_fixed<double, xt::xshape<n_global, 1>> scale = (inParams.spinTerms);
+    scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
+    scale *= (inParams.ffRatioP) * (inParams.ffRatioR);
+
+    inParams.ampRe = m2Term * scale;
+    inParams.ampIm = resMass * totWidth * scale;
 }
 
 void benchAoS()
@@ -441,17 +521,22 @@ void benchSoA()
 {
     ResParamsSoA parsR(n_global);
 
-    std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
-    std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
-    std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
-    std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
-    std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
+    std::random_device r;
 
-    std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
-    std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
+    std::default_random_engine e1(r());
+    std::uniform_int_distribution<float> uniform_dist(0, 1);
 
-    parsR.resMass = 1.0;
-    parsR.resWidth = 0.1;
+    std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), uniform_dist(e1));
+    std::fill(parsR.mass->begin(), parsR.mass->end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), uniform_dist(e1));
+    std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), uniform_dist(e1));
+
+    std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), uniform_dist(e1));
+    std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), uniform_dist(e1));
+
+    parsR.resMass =uniform_dist(e1);
+    parsR.resWidth =uniform_dist(e1);
 
     calcAmpSoA(parsR);
 
@@ -463,17 +548,22 @@ void benchSoAStack()
 {
     ResParamsSoAStack parsR(n_global);
 
-    std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), 0.05);
-    std::fill(parsR.mass.begin(), parsR.mass.end(), 0.3);
-    std::fill(parsR.ffRatioP.begin(), parsR.ffRatioP.end(), 3.3);
-    std::fill(parsR.ffRatioR.begin(), parsR.ffRatioR.end(), 1.0);
-    std::fill(parsR.spinTerms.begin(), parsR.spinTerms.end(), 1.0);
+    std::random_device r;
 
-    std::fill(parsR.ampRe.begin(), parsR.ampRe.end(), 1.0);
-    std::fill(parsR.ampIm.begin(), parsR.ampIm.end(), 1.0);
+    std::default_random_engine e1(r());
+    std::uniform_int_distribution<float> uniform_dist(0, 1);
 
-    parsR.resMass = 1.0;
-    parsR.resWidth = 0.1;
+    std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), uniform_dist(e1));
+    std::fill(parsR.mass.begin(), parsR.mass.end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioP.begin(), parsR.ffRatioP.end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioR.begin(), parsR.ffRatioR.end(), uniform_dist(e1));
+    std::fill(parsR.spinTerms.begin(), parsR.spinTerms.end(), uniform_dist(e1));
+
+    std::fill(parsR.ampRe.begin(), parsR.ampRe.end(), uniform_dist(e1));
+    std::fill(parsR.ampIm.begin(), parsR.ampIm.end(), uniform_dist(e1));
+
+    parsR.resMass = uniform_dist(e1);
+    parsR.resWidth = uniform_dist(e1);
 
     calcAmpSoAStack(parsR);
 
@@ -508,19 +598,22 @@ void benchBlaze()
 {
     ResParamsBlaze parsR;
 
-    parsR.qTerm = 1.3;
-    parsR.mass = 1.0;
-    parsR.ffRatioP = 1.3;
-    parsR.ffRatioR = 1.2;
-    parsR.spinTerms = 1.8;
+    std::random_device r;
 
-    parsR.ampRe = 1.1;
-    parsR.ampIm = 1.2;
+    std::default_random_engine e1(r());
+    std::uniform_int_distribution<float> uniform_dist(0, 1);
 
-    parsR.resMass = 1.2;
-    parsR.resWidth = 0.3;
+    parsR.qTerm = uniform_dist(e1);
+    parsR.mass = uniform_dist(e1);
+    parsR.ffRatioP = uniform_dist(e1);
+    parsR.ffRatioR = uniform_dist(e1);
+    parsR.spinTerms = uniform_dist(e1);
 
-    // std::cout << parsR.qTerm << std::endl;
+    parsR.ampRe = uniform_dist(e1);
+    parsR.ampIm = uniform_dist(e1);
+
+    parsR.resMass = uniform_dist(e1);
+    parsR.resWidth = uniform_dist(e1);
 
     calcAmpBlaze(parsR);
 
@@ -528,9 +621,36 @@ void benchBlaze()
     // std::cout << parsR.ampIm[5] << std::endl;
 }
 
+void benchXTensor()
+{
+    ResParamsXTensor parsR;
+
+    std::random_device r;
+
+    std::default_random_engine e1(r());
+    std::uniform_real_distribution<float> uniform_dist(0.0, 1.0);
+
+    parsR.qTerm.fill(uniform_dist(e1));
+    parsR.mass.fill(uniform_dist(e1));
+    parsR.ffRatioP.fill(uniform_dist(e1));
+    parsR.ffRatioR.fill(uniform_dist(e1));
+    parsR.spinTerms.fill(uniform_dist(e1));
+
+    parsR.ampRe.fill(uniform_dist(e1));
+    parsR.ampIm.fill(uniform_dist(e1));
+
+    parsR.resMass = uniform_dist(e1);
+    parsR.resWidth = uniform_dist(e1);
+
+    calcAmpXTensor(parsR);
+
+    // std::cout << parsR.ampRe[5] << std::endl;
+    // std::cout << parsR.ampIm[5] << std::endl;
+}
+
 int main(int argc, char const *argv[]) {
 
-    int n_itr = 100;
+    int n_itr = 100000;
 
     std::cout<< "SoA:" << std::endl;
     {
@@ -576,6 +696,14 @@ int main(int argc, char const *argv[]) {
     {
     boost::timer::auto_cpu_timer t;
     for (int i = 0; i < n_itr; i++) { benchBlaze(); }
+    }
+
+    std::cout << std::endl;
+
+    std::cout<< "XTensor:" << std::endl;
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchXTensor(); }
     }
 
     return 0;
