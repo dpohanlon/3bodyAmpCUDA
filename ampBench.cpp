@@ -524,7 +524,7 @@ void benchSoA()
     std::random_device r;
 
     std::default_random_engine e1(r());
-    std::uniform_int_distribution<float> uniform_dist(0, 1);
+    std::uniform_real_distribution<float> uniform_dist(0, 1);
 
     std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), uniform_dist(e1));
     std::fill(parsR.mass->begin(), parsR.mass->end(), uniform_dist(e1));
@@ -551,7 +551,7 @@ void benchSoAStack()
     std::random_device r;
 
     std::default_random_engine e1(r());
-    std::uniform_int_distribution<float> uniform_dist(0, 1);
+    std::uniform_real_distribution<float> uniform_dist(0, 1);
 
     std::fill(parsR.qTerm.begin(), parsR.qTerm.end(), uniform_dist(e1));
     std::fill(parsR.mass.begin(), parsR.mass.end(), uniform_dist(e1));
@@ -601,7 +601,7 @@ void benchBlaze()
     std::random_device r;
 
     std::default_random_engine e1(r());
-    std::uniform_int_distribution<float> uniform_dist(0, 1);
+    std::uniform_real_distribution<float> uniform_dist(0, 1);
 
     parsR.qTerm = uniform_dist(e1);
     parsR.mass = uniform_dist(e1);
