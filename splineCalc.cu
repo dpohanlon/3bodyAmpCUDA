@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 
+#include <random>
+#include <cmath>
+
 class Managed {
 
 public:
@@ -259,24 +262,56 @@ void calcSplineGPU(std::vector<float> * knotsX,
     delete splineParams;
 }
 
+float normalDist(float mu, float sigma, float x)
+{
+	float norm = 1. / (sigma * std::sqrt(2 * M_PI));
+	float z = (x - mu) / sigma;
+
+	float arg = -0.5 * z * z;
+
+	return norm * std::exp(arg);
+
+}
+
 int main(int argc, char const *argv[]) {
 
-    std::vector<float> * knotsX = new std::vector<float>;
-    std::vector<float> * knotsY = new std::vector<float>;
-    std::vector<float> * dydxs = new std::vector<float>;
-    std::vector<float> * masses = new std::vector<float>;
+	std::default_random_engine generator;
+	std::normal_distribution<float> normal(0.0, 1.0);
 
-    knotsX->resize(100);
-    knotsY->resize(100);
-    dydxs->resize(100);
-    masses->resize(1000);
+	int n = 10000;
+    int nKnots = 10;
+
+	std::vector<float> data(n);
+
+	for (auto & d : data) d = normal(generator);
+
+	std::cout << data[123] << std::endl;
+
+    std::vector<float> * knotsX = new std::vector<float>(nKnots);
+    std::vector<float> * knotsY = new std::vector<float>(nKnots);
+    std::vector<float> * dydxs = new std::vector<float>(nKnots);
+    std::vector<float> * masses = new std::vector<float>(n);
+
+    float startKnot = -3.0;
+    float endKnot = 3.0;
+    float stepSize = (endKnot - startKnot) / nKnots;
+
+    for (int i = 0; i < nKnots; i++) {
+        (*knotsX)[i] = startKnot + i * stepSize;
+        (*knotsY)[i] = (n / nKnots) * normalDist(0.0, 1.0, (*knotsX)[i]);
+    }
+
+    // knotsX->resize(100);
+    // knotsY->resize(100);
+    // dydxs->resize(100);
+    // masses->resize(1000);
 
     // std::fill(knotsX->begin(), knotsX->end(), 0.05);
     // std::fill(knotsY->begin(), knotsY->end(), 0.05);
     // std::fill(dydxs->begin(), dydxs->end(), 0.05);
     // std::fill(masses->begin(), masses->end(), 0.1);
 
-    calcSplineGPU(knotsX, knotsY, dydxs, masses);
+    // calcSplineGPU(knotsX, knotsY, dydxs, masses);
 
     return 0;
 }
