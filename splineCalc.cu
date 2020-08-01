@@ -153,18 +153,21 @@ std::vector<float> calculateGrads(std::vector<float> x, std::vector<float> y)
         float xDi = x[i] - x[i - 1];
         float xD1i = x[i + 1] - x[i];
 
-    a[i] = 1. / xDi;
-    b[i] = 2. / xDi + 2. / xD1i;
-    c[i] = 1./ xD1i;
-    d[i] = 3. * (y[i] - y[i - 1]) / ( xDi * xDi ) + 3. * (y[i + 1] - y[i]) / ( xD1i * xD1i );
+        a[i] = 1. / xDi;
+        b[i] = 2. / xDi + 2. / xD1i;
+        c[i] = 1./ xD1i;
+        d[i] = 3. * (y[i] - y[i - 1]) / ( xDi * xDi ) + 3. * (y[i + 1] - y[i]) / ( xD1i * xD1i );
+
     }
 
     c[0] /= b[0];
     d[0] /= b[0];
 
     for(uint i = 1; i < nKnots - 1; i++) {
+
         c[i] = c[i] / (b[i] - a[i] * c[i - 1]);
         d[i] = (d[i] - a[i] * d[i - 1]) / (b[i] - a[i] * c[i - 1]);
+
     }
 
     d[nKnots - 1] = (d[nKnots - 1] - a[nKnots - 1] * d[nKnots - 2]) / (b[nKnots - 1] - a[nKnots - 1] * c[nKnots - 2]);
