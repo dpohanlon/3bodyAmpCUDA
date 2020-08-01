@@ -113,6 +113,71 @@ public:
 
 };
 
+// Basically straight from the Laura++ implementation
+// Only a loop with trip count nKnots, probably not worth putting it on the GPU
+// Fit for y eventually, here just assume they are given.
+std::vector<float> calculateGrads(std::vector<float> x, std::vector<float> y)
+{
+    int nKnots = x.size();
+
+    std::vector<float> a(nKnots);
+    std::vector<float> b(nKnots);
+    std::vector<float> c(nKnots);
+    std::vector<float> d(nKnots);
+
+    std::vector<float> grad(nKnots);
+
+    a[0] = 0.;
+	c[nKnots - 1] = 0.;
+
+    // Left
+
+    float xD10 = x[1] - x[0];
+
+    b[0] = 2. / xD10;
+    c[0] = 1. / xD10;
+    d[0] = 3. * (y[1] - y[0]) / ( xD10 * xD10 );
+
+    // Right
+
+    float xk12 = x[nKnots - 1] - x[nKnots - 2];
+
+    a[nKnots - 1] = 1. / xk12;
+    b[nKnots - 1] = 2. / xk12;
+    d[nKnots - 1] = 3. * (y[nKnots - 1] - y[nKnots - 2]) / ( xk12 * xk12 );
+
+    // Internal
+
+    for(uint i = 1; i < nKnots - 1; i++) {
+
+        float xDi = x[i] - x[i - 1];
+        float xD1i = x[i + 1] - x[i];
+
+		a[i] = 1. / xDi;
+		b[i] = 2. / xDi + 2. / xD1i;
+		c[i] = 1./ xD1i;
+		d[i] = 3. * (y[i] - y[i - 1]) / ( xDi * xDi ) + 3. * (y[i + 1] - y[i]) / ( xD1i * xD1i );
+	}
+
+    c[0] /= b[0];
+    d[0] /= b[0];
+
+    for(uint i = 1; i < nKnots - 1; i++) {
+        c[i] = c[i] / (b[i] - a[i] * c[i - 1]);
+        d[i] = (d[i] - a[i] * d[i - 1]) / (b[i] - a[i] * c[i - 1]);
+    }
+
+    d[nKnots - 1] = (d[nKnots - 1] - a[nKnots - 1] * d[nKnots - 2]) / (b[nKnots - 1] - a[nKnots - 1] * c[nKnots - 2]);
+
+    grad[nKnots - 1] = d[nKnots - 1];
+
+    for(int i = nKnots - 2; i >= 0; i--) {
+        grad[i] = d[i] - c[i] * grad[i + 1];
+    }
+
+    return grad;
+}
+
 __global__
 void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * params, FloatArr * splineVals)
 {
