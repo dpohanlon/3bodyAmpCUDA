@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <random>
+#include <cmath>
 
 // From http://www.drdobbs.com/genericprogramming-mappings-between-type/184403750
 template <int I>
@@ -311,6 +313,28 @@ float legFunc<Int2Type<SPIN5>>(float cosHel)
     return -32.0*(63.0*cosHel*cosHel*cosHel*cosHel*cosHel - 70.0*cosHel*cosHel*cosHel + 15.0*cosHel)/63.0;
 }
 
+// For branching
+
+float legFunc0(float cosHel)
+{
+    return 1.0;
+}
+
+float legFunc1(float cosHel)
+{
+    return -2.0 * cosHel;
+}
+
+float legFunc2(float cosHel)
+{
+    return 4.0*(3.0*cosHel*cosHel - 1.0)/3.0;
+}
+
+float legFunc3(float cosHel)
+{
+    return -8.0*(5.0*cosHel*cosHel*cosHel - 3.0*cosHel)/5.0;
+}
+
 // Cov factors
 
 template<typename Spin>
@@ -392,6 +416,22 @@ void legKern(const int n, KernelParamsL * params)
 
     for (int i = index; i < n; i += stride){
         params->leg[i] = legFunc<Spin>(params->cosHel[i]);
+    }
+
+}
+
+__global__
+void legKernBranch(const int n, const int spin, KernelParamsL * params)
+{
+
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = index; i < n; i += stride){
+        if (spin == 0) params->leg[i] = legFunc0(params->cosHel[i]);
+        if (spin == 1) params->leg[i] = legFunc1(params->cosHel[i]);
+        if (spin == 2) params->leg[i] = legFunc2(params->cosHel[i]);
+        if (spin == 3) params->leg[i] = legFunc3(params->cosHel[i]);
     }
 
 }
