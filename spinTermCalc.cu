@@ -444,6 +444,15 @@ void legKernBranch(const int n, const int spin, KernelParamsL * params)
 
 }
 
+void legCPU(const int n, SpinTermParams & params)
+{
+
+    for (int i = 0; i < n; i++){
+        (*params.leg)[i] = legFunc<Spin>((*params.cosHel)[i]);
+    }
+
+}
+
 template<typename Spin>
 __global__
 void spinTermZemachKern(const int n, KernelParams * params)
@@ -507,14 +516,14 @@ void calcLegendrePolyManaged(const SpinTermParams & inParams)
 
 	{
 	boost::timer::auto_cpu_timer t;
-	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
-	legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
 
 	kParams->sync();
 
@@ -675,13 +684,14 @@ int main(int argc, char const *argv[]) {
 	std::fill(pars.leg->begin(), pars.leg->end(), 1.0);
 	std::fill(pars.spinTerms->begin(), pars.spinTerms->end(), 1.0);
 
-	// {
-	// boost::timer::auto_cpu_timer t;
+	{
+	boost::timer::auto_cpu_timer t;
 	// calcSpinTerm(pars);
 	// calcSpinTermCPU(pars);
 	// calcLegendrePolyManagedBranch(pars);
 	calcLegendrePolyManaged(pars);
-	// }
+	// legCPU(pars.leg->size(), pars);
+	}
 
 	std::cout << (pars.leg)->at(5) << std::endl;
 	std::cout << (pars.spinTerms)->at(5) << std::endl;

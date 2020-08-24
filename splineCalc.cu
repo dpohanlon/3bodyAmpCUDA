@@ -119,7 +119,7 @@ public:
 // Basically straight from the Laura++ implementation
 // Only a loop with trip count nKnots, probably not worth putting it on the GPU
 // Fit for y eventually, here just assume they are given.
-std::vector<float> calculateGrads(std::vector<float> x, std::vector<float> y)
+std::vector<float> calculateGrads(std::vector<float> &x, std::vector<float> &y)
 {
     int nKnots = x.size();
 
@@ -270,7 +270,6 @@ float normalDist(float mu, float sigma, float x)
 	float arg = -0.5 * z * z;
 
 	return norm * std::exp(arg);
-
 }
 
 int main(int argc, char const *argv[]) {
@@ -289,7 +288,6 @@ int main(int argc, char const *argv[]) {
 
     std::vector<float> * knotsX = new std::vector<float>(nKnots);
     std::vector<float> * knotsY = new std::vector<float>(nKnots);
-    std::vector<float> * dydxs = new std::vector<float>(nKnots);
     std::vector<float> * masses = new std::vector<float>(n);
 
     float startKnot = -3.0;
@@ -301,17 +299,9 @@ int main(int argc, char const *argv[]) {
         (*knotsY)[i] = (n / nKnots) * normalDist(0.0, 1.0, (*knotsX)[i]);
     }
 
-    // knotsX->resize(100);
-    // knotsY->resize(100);
-    // dydxs->resize(100);
-    // masses->resize(1000);
+    std::vector<float> dydxs = calculateGrads(*knotsX, *knotsY);
 
-    // std::fill(knotsX->begin(), knotsX->end(), 0.05);
-    // std::fill(knotsY->begin(), knotsY->end(), 0.05);
-    // std::fill(dydxs->begin(), dydxs->end(), 0.05);
-    // std::fill(masses->begin(), masses->end(), 0.1);
-
-    // calcSplineGPU(knotsX, knotsY, dydxs, masses);
+    calcSplineGPU(knotsX, knotsY, &dydxs, &data);
 
     return 0;
 }
