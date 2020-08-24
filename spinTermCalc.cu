@@ -343,6 +343,12 @@ float legFunc3(float cosHel)
     return -8.0*(5.0*cosHel*cosHel*cosHel - 3.0*cosHel)/5.0;
 }
 
+__host__ __device__
+float legFunc4(float cosHel)
+{
+	return 16.0*(35.0*cosHel*cosHel*cosHel*cosHel - 30.0*cosHel*cosHel + 3.0)/35.0;
+}
+
 // Cov factors
 
 template<typename Spin>
@@ -448,7 +454,12 @@ void legCPU(const int n, SpinTermParams & params)
 {
 
     for (int i = 0; i < n; i++){
-        (*params.leg)[i] = legFunc<Spin>((*params.cosHel)[i]);
+        // (*params.leg)[i] = legFunc<Spin>((*params.cosHel)[i]);
+		(*params.leg)[i] = legFunc1((*params.cosHel)[i]);
+		(*params.leg)[i] = legFunc2((*params.cosHel)[i]);
+		(*params.leg)[i] = legFunc3((*params.cosHel)[i]);
+		(*params.leg)[i] = legFunc4((*params.cosHel)[i]);
+		// (*params.leg)[i] = legFunc<Spin>((*params.cosHel)[i]);
     }
 
 }
@@ -516,11 +527,16 @@ void calcLegendrePolyManaged(const SpinTermParams & inParams)
 
 	{
 	boost::timer::auto_cpu_timer t;
-	legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
-	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
-	// legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
-	// legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
-	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	// legKern<Int2Type<inParams.spin>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
+	legKern<Int2Type<4>><<<numBlocks, blockSize>>>(n, kParams);
 	// legKern<Int2Type<2>><<<numBlocks, blockSize>>>(n, kParams);
 	// legKern<Int2Type<3>><<<numBlocks, blockSize>>>(n, kParams);
 	// legKern<Int2Type<1>><<<numBlocks, blockSize>>>(n, kParams);
@@ -625,11 +641,14 @@ void calcAmp(const ResParams & inParams)
 	int blockSize = 128;
 	int numBlocks = (n + blockSize - 1) / blockSize;
 
-    for (int i = 0; i < 100; i++){
-        ampKern<<<numBlocks, blockSize>>>(n, inParams.resMass, inParams.resWidth, kParams);
-    }
+	{
+	boost::timer::auto_cpu_timer t;
+
+    ampKern<<<numBlocks, blockSize>>>(n, inParams.resMass, inParams.resWidth, kParams);
 
 	kParams->sync();
+
+	}
 
 	inParams.ampRe->insert(inParams.ampRe->begin(), &kParams->ampRe[0], &kParams->ampRe[n]);
     inParams.ampIm->insert(inParams.ampIm->begin(), &kParams->ampIm[0], &kParams->ampIm[n]);
@@ -677,47 +696,49 @@ int main(int argc, char const *argv[]) {
 	// floats -> keep an eye on the precision
 	// Might want to keep some things in GPU memory (e.g., spin terms) for further calculations
 
-	std::fill(pars.cosHel->begin(), pars.cosHel->end(), 0.2);
-	std::fill(pars.q->begin(), pars.q->end(), 0.05);
-	std::fill(pars.p->begin(), pars.p->end(), 0.003);
-	std::fill(pars.erm->begin(), pars.erm->end(), 3.3);
-	std::fill(pars.leg->begin(), pars.leg->end(), 1.0);
-	std::fill(pars.spinTerms->begin(), pars.spinTerms->end(), 1.0);
+	// std::fill(pars.cosHel->begin(), pars.cosHel->end(), 0.2);
+	// std::fill(pars.q->begin(), pars.q->end(), 0.05);
+	// std::fill(pars.p->begin(), pars.p->end(), 0.003);
+	// std::fill(pars.erm->begin(), pars.erm->end(), 3.3);
+	// std::fill(pars.leg->begin(), pars.leg->end(), 1.0);
+	// std::fill(pars.spinTerms->begin(), pars.spinTerms->end(), 1.0);
+	//
+	// {
+	// boost::timer::auto_cpu_timer t;
+	// // calcSpinTerm(pars);
+	// // calcSpinTermCPU(pars);
+	// // calcLegendrePolyManagedBranch(pars);
+	// // calcLegendrePolyManaged(pars);
+	// legCPU(pars.leg->size(), pars);
+	// }
+	//
+	// std::cout << (pars.leg)->at(5) << std::endl;
+	// std::cout << (pars.spinTerms)->at(5) << std::endl;
+
+	//
+
+    ResParams parsR(int(1E6));
+
+	std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
+	std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
+	std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
+	std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
+	std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
+
+	std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
+	std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
+
+    parsR.resMass = 1.0;
+    parsR.resWidth = 0.1;
 
 	{
 	boost::timer::auto_cpu_timer t;
-	// calcSpinTerm(pars);
-	// calcSpinTermCPU(pars);
-	// calcLegendrePolyManagedBranch(pars);
-	calcLegendrePolyManaged(pars);
-	// legCPU(pars.leg->size(), pars);
+	// calcAmp(parsR);
+	calcAmpCPU(parsR);
 	}
 
-	std::cout << (pars.leg)->at(5) << std::endl;
-	std::cout << (pars.spinTerms)->at(5) << std::endl;
-
-    // ResParams parsR(int(1E8));
-	//
-	// std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), 0.05);
-	// std::fill(parsR.mass->begin(), parsR.mass->end(), 0.3);
-	// std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), 3.3);
-	// std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), 1.0);
-	// std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), 1.0);
-	//
-	// std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), 1.0);
-	// std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), 1.0);
-	//
-    // parsR.resMass = 1.0;
-    // parsR.resWidth = 0.1;
-	//
-	// calcAmp(parsR);
-	//
-    // // for (int i = 0; i < 100; i++){
-    // // 	calcAmpCPU(parsR);
-    // // }
-	//
-    // std::cout << (parsR.ampRe)->at(5) << std::endl;
-	// std::cout << (parsR.ampIm)->at(5) << std::endl;
+    std::cout << (parsR.ampRe)->at(5) << std::endl;
+	std::cout << (parsR.ampIm)->at(5) << std::endl;
 
 	return 0;
 }
