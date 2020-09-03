@@ -4,6 +4,8 @@
 #include <random>
 #include <cmath>
 
+#include <boost/timer/timer.hpp>
+
 class Managed {
 
 public:
@@ -93,6 +95,68 @@ private:
 
 };
 
+// Use a template...
+class IntArr : public Managed
+{
+
+public:
+
+    int size;
+    int * data;
+
+    IntArr() : size(0), data(0)
+    {
+
+    }
+
+    IntArr(std::vector<int> * a) : size(a->size())
+    {
+        // Allocate unified memory
+        realloc_(a->size());
+
+        // Copy C array from vector
+        memcpy(data, a->data(), a->size() * sizeof(int));
+    }
+
+    IntArr(const IntArr & a) : size(a.size)
+    {
+        realloc_(a.size);
+        memcpy(data, a.data, a.size * sizeof(int));
+    }
+
+    ~IntArr() { cudaFree(data); }
+
+    IntArr& operator=(std::vector<int> * a)
+    {
+        size = a->size();
+        realloc_(a->size());
+        memcpy(data, a->data(), size * sizeof(int));
+        return *this;
+    }
+
+    void prefetch()
+    {
+        int device = -1;
+        cudaGetDevice(&device);
+
+        cudaMemPrefetchAsync(data, size * sizeof(int), device, NULL);
+        cudaMemPrefetchAsync(&size, sizeof(int), device, NULL);
+    }
+
+    __host__ __device__
+    int& operator[](int pos) const { return data[pos]; }
+
+private:
+
+    void realloc_(int s)
+    {
+        // cudaFree(data);
+        cudaMallocManaged(&data, s * sizeof(float));
+        cudaDeviceSynchronize();
+    }
+
+};
+
 class SplineParams : public Managed
 {
 
@@ -101,17 +165,19 @@ public:
     FloatArr knotsX;
     FloatArr knotsY;
     FloatArr dydxs;
+    IntArr cells;
 
     SplineParams() {}
 
-    SplineParams(FloatArr knotsX_, FloatArr knotsY_, FloatArr dydxs_)
-                 : knotsX(knotsX_), knotsY(knotsY_), dydxs(dydxs_) {}
+    SplineParams(FloatArr knotsX_, FloatArr knotsY_, FloatArr dydxs_, IntArr cells_)
+                 : knotsX(knotsX_), knotsY(knotsY_), dydxs(dydxs_), cells(cells_) {}
 
     void prefetch()
     {
         knotsX.prefetch();
         knotsY.prefetch();
         dydxs.prefetch();
+        cells.prefetch();
     }
 
 };
@@ -195,12 +261,12 @@ void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * param
 
     for (int i = index; i < n; i += stride){
 
-        int cell(0);
+        int cell = params->cells[i];
 
-        // Try and avoid this on GPU if possible -> precompute and save?
-        while( (*xs)[i] > params->knotsX[cell+1] ) {
-            ++cell;
-        }
+        // // Try and avoid this on GPU if possible -> precompute and save?
+        // while( (*xs)[i] > params->knotsX[cell+1] ) {
+        //     ++cell;
+        // }
 
         // Might be a slow memory access....
 
@@ -222,7 +288,8 @@ void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * param
 void calcSplineGPU(std::vector<float> * knotsX,
                    std::vector<float> * knotsY,
                    std::vector<float> * dydxs,
-                   std::vector<float> * masses)
+                   std::vector<float> * masses,
+                   std::vector<int> * cells)
 {
     int n = masses->size();
     int nKnots = knotsX->size();
@@ -232,6 +299,7 @@ void calcSplineGPU(std::vector<float> * knotsX,
     splineParams->knotsX = knotsX;
     splineParams->knotsY = knotsY;
     splineParams->dydxs = dydxs;
+    splineParams->cells = cells;
 
     FloatArr * xs = new FloatArr(masses);
 
@@ -246,20 +314,76 @@ void calcSplineGPU(std::vector<float> * knotsX,
     xs->prefetch();
     splineVals->prefetch();
 
-    int blockSize = 128;
+    int blockSize = 512;
     int numBlocks = (n + blockSize - 1) / blockSize;
 
-    for (int i = 0; i < 100; i++){
-        evalSplineKern<<<numBlocks, blockSize>>>(n, xs, splineParams, splineVals);
-    }
+    {
+    boost::timer::auto_cpu_timer t;
+
+    evalSplineKern<<<numBlocks, blockSize>>>(n, xs, splineParams, splineVals);
 
     splineParams->sync();
     xs->sync();
     splineVals->sync();
 
+    } // Timer
+
+
     std::cout << (*splineVals)[0] << std::endl;
 
     delete splineParams;
+}
+
+std::vector<float> calcSplineCPU(std::vector<float> & knotsX,
+                   std::vector<float> & knotsY,
+                   std::vector<float> & dydxs,
+                   std::vector<float> & masses,
+                   std::vector<int> & cells)
+{
+
+    std::vector<float> splineVals(masses.size());
+
+    std::cout << splineVals.size() << std::endl;
+
+    for (int i = 0; i < splineVals.size(); i++) {
+
+        int cell = cells[i];
+
+        // while( masses[i] > knotsX[cell+1] ) {
+        //     ++cell;
+        // }
+
+        float xLow  = knotsX[cell];
+        float xHigh = knotsX[cell+1];
+        float yLow  = knotsY[cell];
+        float yHigh = knotsY[cell+1];
+
+        float t = (masses[i] - xLow) / (xHigh - xLow);
+        float a = dydxs[cell] * (xHigh - xLow) - (yHigh - yLow);
+        float b = -1. * dydxs[cell+1] * (xHigh - xLow) + (yHigh - yLow);
+
+        splineVals[i] = (1 - t) * yLow + t * yHigh + t * (1 - t) * ( a * (1 - t) + b * t );
+
+    }
+
+    return splineVals;
+}
+
+std::vector<int> calculateCells(std::vector<float> & masses, std::vector<float> & knotsX)
+{
+    std::vector<int> cells(masses.size());
+
+    for (int i = 0; i < cells.size(); i++) {
+
+        int cell = 0;
+        while( masses[i] > knotsX[cell+1] ) {
+            cell++;
+        }
+
+        cells[i] = cell;
+    }
+
+    return cells;
 }
 
 float normalDist(float mu, float sigma, float x)
@@ -277,14 +401,12 @@ int main(int argc, char const *argv[]) {
 	std::default_random_engine generator;
 	std::normal_distribution<float> normal(0.0, 1.0);
 
-	int n = 10000;
-    int nKnots = 10;
+	int n = 100000;
+    int nKnots = 30;
 
 	std::vector<float> data(n);
 
 	for (auto & d : data) d = normal(generator);
-
-	std::cout << data[123] << std::endl;
 
     std::vector<float> * knotsX = new std::vector<float>(nKnots);
     std::vector<float> * knotsY = new std::vector<float>(nKnots);
@@ -299,9 +421,15 @@ int main(int argc, char const *argv[]) {
         (*knotsY)[i] = (n / nKnots) * normalDist(0.0, 1.0, (*knotsX)[i]);
     }
 
+    std::vector<int> cells = calculateCells(*masses, *knotsX);
+
     std::vector<float> dydxs = calculateGrads(*knotsX, *knotsY);
 
-    calcSplineGPU(knotsX, knotsY, &dydxs, &data);
+    {
+    boost::timer::auto_cpu_timer t;
+    // calcSplineGPU(knotsX, knotsY, &dydxs, &data, &cells);
+    calcSplineCPU(*knotsX, *knotsY, dydxs, data, cells);
+    }
 
     return 0;
 }
