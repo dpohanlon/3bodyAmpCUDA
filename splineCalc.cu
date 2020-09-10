@@ -4,7 +4,7 @@
 #include <random>
 #include <cmath>
 
-#include <boost/timer/timer.hpp>
+// #include <boost/timer/timer.hpp>
 
 class Managed {
 
@@ -34,41 +34,42 @@ public:
     }
 };
 
-class FloatArr : public Managed
+template <class T>
+class CuArray : public Managed
 {
 
 public:
 
     int size;
-    float * data;
+    T * data;
 
-    FloatArr() : size(0), data(0)
+    CuArray() : size(0), data(nullptr)
     {
 
     }
 
-    FloatArr(std::vector<float> * a) : size(a->size())
+    CuArray(std::vector<T> * a) : size(a->size())
     {
         // Allocate unified memory
         realloc_(a->size());
 
         // Copy C array from vector
-        memcpy(data, a->data(), a->size() * sizeof(float));
+        memcpy(data, a->data(), a->size() * sizeof(T));
     }
 
-    FloatArr(const FloatArr & a) : size(a.size)
+    CuArray(const CuArray<T> & a) : size(a.size)
     {
         realloc_(a.size);
-        memcpy(data, a.data, a.size * sizeof(float));
+        memcpy(data, a.data, a.size * sizeof(T));
     }
 
-    ~FloatArr() { cudaFree(data); }
+    ~CuArray() { cudaFree(data); }
 
-    FloatArr& operator=(std::vector<float> * a)
+    CuArray& operator=(std::vector<T> * a)
     {
         size = a->size();
         realloc_(a->size());
-        memcpy(data, a->data(), size * sizeof(float));
+        memcpy(data, a->data(), size * sizeof(T));
         return *this;
     }
 
@@ -77,74 +78,12 @@ public:
         int device = -1;
         cudaGetDevice(&device);
 
-        cudaMemPrefetchAsync(data, size * sizeof(float), device, NULL);
+        cudaMemPrefetchAsync(data, size * sizeof(T), device, NULL);
         cudaMemPrefetchAsync(&size, sizeof(int), device, NULL);
     }
 
     __host__ __device__
-    float& operator[](int pos) const { return data[pos]; }
-
-private:
-
-    void realloc_(int s)
-    {
-        // cudaFree(data);
-        cudaMallocManaged(&data, s * sizeof(float));
-        cudaDeviceSynchronize();
-    }
-
-};
-
-// Use a template...
-class IntArr : public Managed
-{
-
-public:
-
-    int size;
-    int * data;
-
-    IntArr() : size(0), data(0)
-    {
-
-    }
-
-    IntArr(std::vector<int> * a) : size(a->size())
-    {
-        // Allocate unified memory
-        realloc_(a->size());
-
-        // Copy C array from vector
-        memcpy(data, a->data(), a->size() * sizeof(int));
-    }
-
-    IntArr(const IntArr & a) : size(a.size)
-    {
-        realloc_(a.size);
-        memcpy(data, a.data, a.size * sizeof(int));
-    }
-
-    ~IntArr() { cudaFree(data); }
-
-    IntArr& operator=(std::vector<int> * a)
-    {
-        size = a->size();
-        realloc_(a->size());
-        memcpy(data, a->data(), size * sizeof(int));
-        return *this;
-    }
-
-    void prefetch()
-    {
-        int device = -1;
-        cudaGetDevice(&device);
-
-        cudaMemPrefetchAsync(data, size * sizeof(int), device, NULL);
-        cudaMemPrefetchAsync(&size, sizeof(int), device, NULL);
-    }
-
-    __host__ __device__
-    int& operator[](int pos) const { return data[pos]; }
+    T& operator[](int pos) const { return data[pos]; }
 
 private:
 
@@ -162,14 +101,14 @@ class SplineParams : public Managed
 
 public:
 
-    FloatArr knotsX;
-    FloatArr knotsY;
-    FloatArr dydxs;
-    IntArr cells;
+    CuArray<float> knotsX;
+    CuArray<float> knotsY;
+    CuArray<float> dydxs;
+    CuArray<int> cells;
 
     SplineParams() {}
 
-    SplineParams(FloatArr knotsX_, FloatArr knotsY_, FloatArr dydxs_, IntArr cells_)
+    SplineParams(CuArray<float> knotsX_, CuArray<float> knotsY_, CuArray<float> dydxs_, CuArray<int> cells_)
                  : knotsX(knotsX_), knotsY(knotsY_), dydxs(dydxs_), cells(cells_) {}
 
     void prefetch()
@@ -251,7 +190,7 @@ std::vector<float> calculateGrads(std::vector<float> &x, std::vector<float> &y)
 }
 
 __global__
-void evalSplineKern(const int n, const FloatArr * xs, const SplineParams * params, FloatArr * splineVals)
+void evalSplineKern(const int n, const CuArray<float> * xs, const SplineParams * params, CuArray<float> * splineVals)
 {
     // All threads handle blockDim.x * gridDim.x
     // consecutive elements (interleaved partitioning)
@@ -301,14 +240,14 @@ void calcSplineGPU(std::vector<float> * knotsX,
     splineParams->dydxs = dydxs;
     splineParams->cells = cells;
 
-    FloatArr * xs = new FloatArr(masses);
+    CuArray<float> * xs = new CuArray<float>(masses);
 
     std::vector<float> * splineValsV = new std::vector<float>;
     splineValsV->resize(n);
 
     std::fill(splineValsV->begin(), splineValsV->end(), 0.0);
 
-    FloatArr * splineVals = new FloatArr(splineValsV);
+    CuArray<float> * splineVals = new CuArray<float>(splineValsV);
 
     splineParams->prefetch();
     xs->prefetch();
@@ -318,7 +257,7 @@ void calcSplineGPU(std::vector<float> * knotsX,
     int numBlocks = (n + blockSize - 1) / blockSize;
 
     {
-    boost::timer::auto_cpu_timer t;
+    // boost::timer::auto_cpu_timer t;
 
     evalSplineKern<<<numBlocks, blockSize>>>(n, xs, splineParams, splineVals);
 
@@ -426,9 +365,9 @@ int main(int argc, char const *argv[]) {
     std::vector<float> dydxs = calculateGrads(*knotsX, *knotsY);
 
     {
-    boost::timer::auto_cpu_timer t;
-    // calcSplineGPU(knotsX, knotsY, &dydxs, &data, &cells);
-    calcSplineCPU(*knotsX, *knotsY, dydxs, data, cells);
+    // boost::timer::auto_cpu_timer t;
+    calcSplineGPU(knotsX, knotsY, &dydxs, &data, &cells);
+    // calcSplineCPU(*knotsX, *knotsY, dydxs, data, cells);
     }
 
     return 0;
