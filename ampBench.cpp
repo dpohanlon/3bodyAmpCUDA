@@ -1,25 +1,30 @@
 // Compare SoA, AoS, and Eigen (with expression parser)
 // Ideal situation: everything known at compile time
 //
-// g++ ampBench.cpp -O3 -ffast-math -I/usr/local/opt/eigen/include/eigen3 -I/usr/local/Cellar/boost/1.72.0/include/boost/ -lboost_timer -o ampBench
+// g++ ampBench.cpp -O3 -march=native -std=c++17 -ffast-math -I/usr/local/opt/eigen/include/eigen3 -I/usr/local/Cellar/boost/1.72.0/include/boost/ -Rpass-missed=loop-vectorize -lboost_timer -o ampBench
 //
+
 // SoA:
-//  0.755422s wall, 0.750000s user + 0.000000s system = 0.750000s CPU (99.3%)
+//  1.167841s wall, 1.100000s user + 0.060000s system = 1.160000s CPU (99.3%)
+//
+// SoA (array):
+//  0.637546s wall, 0.570000s user + 0.060000s system = 0.630000s CPU (98.8%)
 //
 // SoA (stack):
-//  0.548469s wall, 0.540000s user + 0.010000s system = 0.550000s CPU (100.3%)
+//  0.926747s wall, 0.870000s user + 0.060000s system = 0.930000s CPU (100.4%)
 //
 // AoS:
-//  13.221095s wall, 12.510000s user + 0.680000s system = 13.190000s CPU (99.8%)
+//  14.228890s wall, 12.890000s user + 1.260000s system = 14.150000s CPU (99.4%)
 //
 // AoS (stack):
-//  0.497928s wall, 0.490000s user + 0.000000s system = 0.490000s CPU (98.4%)
+//  1.105483s wall, 0.910000s user + 0.180000s system = 1.090000s CPU (98.6%)
 //
 // Eigen:
-//  1.702296s wall, 1.160000s user + 0.530000s system = 1.690000s CPU (99.3%)
+//  1.072285s wall, 0.930000s user + 0.140000s system = 1.070000s CPU (99.8%)
 
 #include <iostream>
 #include <vector>
+#include <array>
 #include <memory>
 
 #include <Eigen/Dense>
@@ -39,7 +44,7 @@
 using blaze::StaticVector;
 using blaze::DynamicVector;
 
-static const int n_global = 1E3;
+static const int n_global = 1E6;
 
 // Spin 5 - no need for template here
 float legFunc(float cosHel)
@@ -105,6 +110,52 @@ public:
     }
 
     ~ResParamsSoA()
+    {
+        delete mass;
+        delete qTerm;
+        delete ffRatioP;
+        delete ffRatioR;
+        delete spinTerms;
+
+        delete ampRe;
+        delete ampIm;
+    }
+
+};
+
+struct ResParamsSoAArray
+{
+public:
+
+    float resMass;
+    float resWidth;
+
+    std::array<float, n_global> * mass;
+    std::array<float, n_global> * qTerm;
+    std::array<float, n_global> * ffRatioP;
+    std::array<float, n_global> * ffRatioR;
+    std::array<float, n_global> * spinTerms;
+
+    std::array<float, n_global> * ampRe;
+    std::array<float, n_global> * ampIm;
+
+    // Deal with these guys later...
+    static const int spin = 4;
+    static const int spinType = 1;
+
+    ResParamsSoAArray(int s)
+    {
+        mass = new std::array<float, n_global>();
+        qTerm = new std::array<float, n_global>();
+        ffRatioP = new std::array<float, n_global>();
+        ffRatioR = new std::array<float, n_global>();
+        spinTerms = new std::array<float, n_global>();
+
+        ampRe = new std::array<float, n_global>();
+        ampIm = new std::array<float, n_global>();
+    }
+
+    ~ResParamsSoAArray()
     {
         delete mass;
         delete qTerm;
@@ -326,6 +377,31 @@ void calcAmpSoA(const ResParamsSoA & inParams)
         float scale = inParams.spinTerms->at(i);
         scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
         scale *= inParams.ffRatioP->at(i) * inParams.ffRatioR->at(i); // Optional -> template specialise?
+        scale *= legFunc(inParams.spinTerms->at(i));
+
+        inParams.ampRe->at(i) = m2Term * scale;
+        inParams.ampIm->at(i) = resMass * totWidth * scale;
+    }
+}
+
+void calcAmpSoA(const ResParamsSoAArray & inParams)
+{
+    float resMass = inParams.resMass;
+    float resWidth = inParams.resWidth;
+
+    #pragma clang loop vectorize(assume_safety)
+    for (int i = 0; i < n_global; i++) {
+        float totWidth = resWidth * inParams.qTerm->at(i);
+        totWidth *= (resMass / inParams.mass->at(i));
+        totWidth *= inParams.ffRatioP->at(i) * inParams.ffRatioR->at(i);
+
+        float m2 = inParams.mass->at(i) * inParams.mass->at(i);
+        float m2Term = resMass * resMass - m2;
+
+        float scale = inParams.spinTerms->at(i);
+        scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
+        scale *= inParams.ffRatioP->at(i) * inParams.ffRatioR->at(i); // Optional -> template specialise?
+        scale *= legFunc(inParams.spinTerms->at(i));
 
         inParams.ampRe->at(i) = m2Term * scale;
         inParams.ampIm->at(i) = resMass * totWidth * scale;
@@ -348,6 +424,7 @@ void calcAmpSoAStack(ResParamsSoAStack & inParams)
         float scale = inParams.spinTerms.at(i);
         scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
         scale *= inParams.ffRatioP.at(i) * inParams.ffRatioR.at(i); // Optional -> template specialise?
+        scale *= legFunc(inParams.spinTerms.at(i));
 
         inParams.ampRe.at(i) = m2Term * scale;
         inParams.ampIm.at(i) = resMass * totWidth * scale;
@@ -368,6 +445,7 @@ void calcAmpAoS(const std::vector<std::unique_ptr<ResParams> > & inParams, float
         float scale = inParams.at(i)->spinTerms;
         scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
         scale *= inParams.at(i)->ffRatioP * inParams.at(i)->ffRatioR; // Optional -> template specialise?
+        scale *= legFunc(inParams.at(i)->spinTerms);
 
         inParams.at(i)->ampRe = m2Term * scale;
         inParams.at(i)->ampIm = resMass * totWidth * scale;
@@ -388,6 +466,7 @@ void calcAmpAoSStack(std::vector<ResParams> & inParams, float resMass, float res
         float scale = inParams.at(i).spinTerms;
         scale /= m2Term * m2Term + resMass * resMass * totWidth * totWidth;
         scale *= inParams.at(i).ffRatioP * inParams.at(i).ffRatioR; // Optional -> template specialise?
+        scale *= legFunc(inParams.at(i).spinTerms);
 
         inParams.at(i).ampRe = m2Term * scale;
         inParams.at(i).ampIm = resMass * totWidth * scale;
@@ -544,6 +623,33 @@ void benchSoA()
     // std::cout << (parsR.ampIm)->at(5) << std::endl;
 }
 
+void benchSoAArray()
+{
+    ResParamsSoAArray parsR(n_global);
+
+    std::random_device r;
+
+    std::default_random_engine e1(r());
+    std::uniform_real_distribution<float> uniform_dist(0, 1);
+
+    std::fill(parsR.qTerm->begin(), parsR.qTerm->end(), uniform_dist(e1));
+    std::fill(parsR.mass->begin(), parsR.mass->end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioP->begin(), parsR.ffRatioP->end(), uniform_dist(e1));
+    std::fill(parsR.ffRatioR->begin(), parsR.ffRatioR->end(), uniform_dist(e1));
+    std::fill(parsR.spinTerms->begin(), parsR.spinTerms->end(), uniform_dist(e1));
+
+    std::fill(parsR.ampRe->begin(), parsR.ampRe->end(), uniform_dist(e1));
+    std::fill(parsR.ampIm->begin(), parsR.ampIm->end(), uniform_dist(e1));
+
+    parsR.resMass = uniform_dist(e1);
+    parsR.resWidth = uniform_dist(e1);
+
+    calcAmpSoA(parsR);
+
+    // std::cout << (parsR.ampRe)->at(5) << std::endl;
+    // std::cout << (parsR.ampIm)->at(5) << std::endl;
+}
+
 void benchSoAStack()
 {
     ResParamsSoAStack parsR(n_global);
@@ -650,12 +756,20 @@ void benchXTensor()
 
 int main(int argc, char const *argv[]) {
 
-    int n_itr = 100000;
+    int n_itr = 100;
 
     std::cout<< "SoA:" << std::endl;
     {
     boost::timer::auto_cpu_timer t;
     for (int i = 0; i < n_itr; i++) { benchSoA(); }
+    }
+
+    std::cout << std::endl;
+
+    std::cout<< "SoA (array):" << std::endl;
+    {
+    boost::timer::auto_cpu_timer t;
+    for (int i = 0; i < n_itr; i++) { benchSoAArray(); }
     }
 
     std::cout << std::endl;
@@ -684,27 +798,31 @@ int main(int argc, char const *argv[]) {
 
     std::cout << std::endl;
 
+    // Without Legendre term
+
     std::cout<< "Eigen:" << std::endl;
     {
     boost::timer::auto_cpu_timer t;
     for (int i = 0; i < n_itr; i++) { benchEigen(); }
     }
 
-    std::cout << std::endl;
+    // Segfaults for some reason?
 
-    std::cout<< "Blaze:" << std::endl;
-    {
-    boost::timer::auto_cpu_timer t;
-    for (int i = 0; i < n_itr; i++) { benchBlaze(); }
-    }
-
-    std::cout << std::endl;
-
-    std::cout<< "XTensor:" << std::endl;
-    {
-    boost::timer::auto_cpu_timer t;
-    for (int i = 0; i < n_itr; i++) { benchXTensor(); }
-    }
+    // std::cout << std::endl;
+    //
+    // std::cout<< "Blaze:" << std::endl;
+    // {
+    // boost::timer::auto_cpu_timer t;
+    // for (int i = 0; i < n_itr; i++) { benchBlaze(); }
+    // }
+    //
+    // std::cout << std::endl;
+    //
+    // std::cout<< "XTensor:" << std::endl;
+    // {
+    // boost::timer::auto_cpu_timer t;
+    // for (int i = 0; i < n_itr; i++) { benchXTensor(); }
+    // }
 
     return 0;
 }
